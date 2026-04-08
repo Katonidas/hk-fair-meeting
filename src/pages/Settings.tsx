@@ -152,11 +152,17 @@ export default function Settings({ currentUser }: Props) {
   }
 
   async function handleClearData() {
-    if (!window.confirm('¿Estás seguro de que quieres borrar TODOS los datos locales? Esta acción no se puede deshacer.')) return
+    const pwd = window.prompt('Introduce la contraseña para borrar todos los datos:')
+    if (pwd !== 'APPROX') {
+      if (pwd !== null) window.alert('Contraseña incorrecta')
+      return
+    }
+    if (!window.confirm('¿Estás seguro? Se borrarán TODOS los datos locales. Esta acción no se puede deshacer.')) return
     await db.products.clear()
     await db.product_photos.clear()
     await db.meetings.clear()
     await db.suppliers.clear()
+    await db.searched_products.clear()
     navigate('/')
   }
 
