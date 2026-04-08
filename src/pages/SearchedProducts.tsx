@@ -7,6 +7,16 @@ import { db } from '@/lib/db'
 import { getFormulaGame, getFormulaTicnova } from '@/lib/settings'
 import type { SearchedProduct } from '@/types/searchedProduct'
 
+function formatMarginDisplay(margin: string): string {
+  if (!margin) return '—'
+  const val = parseFloat(margin.replace('%', '').replace(',', '.').trim())
+  if (isNaN(val)) return margin
+  // If stored as decimal (e.g. 0.6), show as 60%
+  if (val > 0 && val < 1) return `${Math.round(val * 100)}%`
+  // If already a percentage number (e.g. 60), show as 60%
+  return `${Math.round(val)}%`
+}
+
 function calcTargetCost(brand: string, pvpr: number | null, marginTarget: string): number | null {
   if (!pvpr || !marginTarget) return null
   const margin = parseFloat(marginTarget.replace('%', '').replace(',', '.').trim())
@@ -27,6 +37,7 @@ export default function SearchedProducts() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingProduct, setEditingProduct] = useState<SearchedProduct | null>(null)
+  const [viewingProduct, setViewingProduct] = useState<SearchedProduct | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importResult, setImportResult] = useState<string | null>(null)
 
@@ -203,12 +214,12 @@ export default function SearchedProducts() {
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="px-2 py-2 text-left font-semibold text-gray-500">Marca</th>
-                  <th className="px-2 py-2 text-left font-semibold text-gray-500">Tipo</th>
+                  <th className="px-2 py-2 text-left font-semibold text-gray-500">Tipo Producto</th>
                   <th className="px-2 py-2 text-left font-semibold text-gray-500">Ref/Seg.</th>
                   <th className="px-2 py-2 text-left font-semibold text-gray-500">Specs</th>
+                  <th className="px-2 py-2 text-right font-bold text-gray-700">Target Compra USD</th>
                   <th className="px-2 py-2 text-right font-semibold text-gray-500">Margen %</th>
                   <th className="px-2 py-2 text-right font-semibold text-gray-500">PVPR €</th>
-                  <th className="px-2 py-2 text-right font-semibold text-gray-500">Target $</th>
                   <th className="px-2 py-2 text-left font-semibold text-gray-500">Modelo</th>
                   <th className="px-2 py-2 text-center font-semibold text-gray-500 w-16"></th>
                 </tr>
@@ -217,16 +228,20 @@ export default function SearchedProducts() {
                 {products.map(p => {
                   const computed = calcTargetCost(p.brand, p.pvpr, p.margin_target)
                   return (
-                    <tr key={p.id} className="border-b border-gray-100 bg-white hover:bg-blue-50">
+                    <tr
+                      key={p.id}
+                      onClick={() => setViewingProduct(p)}
+                      className="cursor-pointer border-b border-gray-100 bg-white hover:bg-blue-50"
+                    >
                       <td className="px-2 py-2.5 font-medium text-gray-800">{p.brand || '—'}</td>
                       <td className="px-2 py-2.5 text-gray-600">{p.product_type}</td>
                       <td className="px-2 py-2.5 text-gray-500">{p.ref_segment || '—'}</td>
                       <td className="px-2 py-2.5 text-gray-500 max-w-[120px] truncate">{p.main_specs || '—'}</td>
-                      <td className="px-2 py-2.5 text-right text-gray-600">{p.margin_target || '—'}</td>
+                      <td className="px-2 py-2.5 text-right font-bold text-green-700">{computed ? `$${computed.toFixed(2)}` : '—'}</td>
+                      <td className="px-2 py-2.5 text-right text-gray-600">{formatMarginDisplay(p.margin_target)}</td>
                       <td className="px-2 py-2.5 text-right text-gray-600">{p.pvpr ? `${p.pvpr.toFixed(2)}€` : '—'}</td>
-                      <td className="px-2 py-2.5 text-right font-semibold text-green-700">{computed ? `$${computed.toFixed(2)}` : '—'}</td>
                       <td className="px-2 py-2.5 text-gray-500">{p.model_interno || '—'}</td>
-                      <td className="px-2 py-2.5 text-center">
+                      <td className="px-2 py-2.5 text-center" onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1 justify-center">
                           <button
                             onClick={() => { setEditingProduct(p); setShowForm(true) }}
@@ -250,6 +265,15 @@ export default function SearchedProducts() {
           </div>
         )}
       </div>
+
+      {/* View Modal */}
+      {viewingProduct && (
+        <ProductViewModal
+          product={viewingProduct}
+          onClose={() => setViewingProduct(null)}
+          onEdit={() => { setEditingProduct(viewingProduct); setShowForm(true); setViewingProduct(null) }}
+        />
+      )}
 
       {/* Form Modal */}
       {showForm && (
@@ -376,3 +400,92 @@ function SearchedProductForm({
   )
 }
 
+function ProductViewModal({
+  product,
+  onClose,
+  onEdit,
+}: {
+  product: SearchedProduct
+  onClose: () => void
+  onEdit: () => void
+}) {
+  const computed = calcTargetCost(product.brand, product.pvpr, product.margin_target)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
+      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-800">Ficha de producto buscado</h3>
+          <button onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">✕</button>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          {/* Header info */}
+          <div className="grid grid-cols-2 gap-3">
+            <ViewField label="Marca" value={product.brand} />
+            <ViewField label="Tipo Producto" value={product.product_type} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <ViewField label="Ref. / Segmento" value={product.ref_segment} />
+            <ViewField label="Modelo Interno" value={product.model_interno} />
+          </div>
+
+          {/* Specs - biggest field */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Main Specs</label>
+            <div className="min-h-[80px] whitespace-pre-wrap rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-800">
+              {product.main_specs || '—'}
+            </div>
+          </div>
+
+          {/* Target Cost - highlighted, right after specs */}
+          <div className="rounded-xl border-2 border-green-300 bg-green-50 p-4 text-center">
+            <label className="block text-xs font-medium text-green-700">TARGET COMPRA USD</label>
+            <p className="mt-1 text-2xl font-bold text-green-800">
+              {computed ? `$${computed.toFixed(2)}` : '—'}
+            </p>
+          </div>
+
+          {/* Pricing */}
+          <div className="grid grid-cols-2 gap-3">
+            <ViewField label="Margen Target" value={formatMarginDisplay(product.margin_target)} />
+            <ViewField label="PVPR" value={product.pvpr ? `${product.pvpr.toFixed(2)} €` : '—'} />
+          </div>
+
+          {/* Examples */}
+          {product.examples && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Examples / Referencias</label>
+              <div className="whitespace-pre-wrap rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                {product.examples}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3">
+            <button onClick={onClose}
+              className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              Cerrar
+            </button>
+            <button onClick={onEdit}
+              className="flex-1 rounded-xl bg-primary py-3 text-sm font-bold text-white hover:bg-primary-light">
+              Editar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ViewField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-gray-500">{label}</label>
+      <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm text-gray-800">
+        {value || '—'}
+      </div>
+    </div>
+  )
+}
