@@ -175,10 +175,16 @@ export default function SupplierDetail({ currentUser }: Props) {
                 <input type="checkbox" checked={hasCatalogue} onChange={e => setHasCatalogue(e.target.checked)} className="h-4 w-4 rounded" />
                 <span className="text-sm text-gray-600">Tiene catálogo</span>
               </label>
-              <EditField label="Temas pendientes" value={pendingTopics} onChange={setPendingTopics} multiline />
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Temas pendientes <span className="font-normal text-gray-400">— incidencias o temas a tratar con el proveedor</span></label>
+                <textarea value={pendingTopics} onChange={e => setPendingTopics(e.target.value)} rows={2} className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-primary focus:outline-none" />
+              </div>
               <EditField label="Productos interesantes" value={interestingProducts} onChange={setInterestingProducts} multiline />
               <EditField label="Productos actuales" value={currentProducts} onChange={setCurrentProducts} multiline />
-              <EditField label="Notas del proveedor" value={supplierNotes} onChange={setSupplierNotes} multiline />
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Notas del proveedor <span className="font-normal text-gray-400">— datos a tener en cuenta a nivel interno</span></label>
+                <textarea value={supplierNotes} onChange={e => setSupplierNotes(e.target.value)} rows={2} className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-primary focus:outline-none" />
+              </div>
             </div>
           ) : (
             <div className="space-y-2 text-sm">
@@ -187,13 +193,23 @@ export default function SupplierDetail({ currentUser }: Props) {
               <InfoRow label="Producto" value={supplier.product_type || '—'} />
               <InfoRow label="Emails" value={supplier.emails.join(', ') || '—'} />
               <InfoRow label="Teléfono" value={supplier.phone || '—'} />
-              <InfoRow label="Relevancia" value={'★'.repeat(supplier.relevance) + '☆'.repeat(3 - supplier.relevance)} />
-              <InfoRow label="Visitado" value={supplier.visited ? 'Sí ✓' : 'No'} />
+              <InfoRow label="Relevancia" value={String(supplier.relevance)} />
+              <InfoRow label="Visitado" value={supplier.visited ? 'Sí' : 'No'} />
               <InfoRow label="Catálogo" value={supplier.has_catalogue ? 'Sí' : 'No'} />
-              {supplier.pending_topics && <InfoRow label="Temas pendientes" value={supplier.pending_topics} />}
+              {supplier.pending_topics && (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs font-semibold text-amber-700">Temas pendientes — incidencias o temas a tratar</p>
+                  <p className="mt-1 text-sm text-amber-900 whitespace-pre-wrap">{supplier.pending_topics}</p>
+                </div>
+              )}
               {supplier.interesting_products && <InfoRow label="Productos interesantes" value={supplier.interesting_products} />}
               {supplier.current_products && <InfoRow label="Productos actuales" value={supplier.current_products} />}
-              {supplier.supplier_notes && <InfoRow label="Notas" value={supplier.supplier_notes} />}
+              {supplier.supplier_notes && (
+                <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <p className="text-xs font-semibold text-blue-700">Notas del proveedor — datos internos</p>
+                  <p className="mt-1 text-sm text-blue-900 whitespace-pre-wrap">{supplier.supplier_notes}</p>
+                </div>
+              )}
             </div>
           )}
         </div>

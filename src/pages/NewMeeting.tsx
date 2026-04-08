@@ -53,8 +53,10 @@ export default function NewMeeting({ currentUser }: Props) {
     navigate(`/meeting/${meetingId}`)
   }
 
-  async function handleSelectSupplier(supplier: Supplier) {
-    await createMeetingForSupplier(supplier.id)
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
+
+  async function handleConfirmSupplier() {
+    if (selectedSupplier) await createMeetingForSupplier(selectedSupplier.id)
   }
 
   return (
@@ -124,30 +126,69 @@ export default function NewMeeting({ currentUser }: Props) {
             className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm focus:border-primary focus:outline-none"
             autoFocus
           />
-          <div className="flex flex-col gap-2">
-            {suppliers?.map(s => (
-              <button
-                key={s.id}
-                onClick={() => handleSelectSupplier(s)}
-                className="flex items-center justify-between rounded-lg bg-white p-4 text-left shadow-sm transition-colors hover:bg-gray-50"
-              >
-                <div>
-                  <p className="font-semibold text-gray-800">{s.name}</p>
-                  <p className="text-xs text-gray-400">
-                    Stand {s.stand} · {s.assigned_person || '—'} · {s.product_type || '—'}
-                  </p>
+          {selectedSupplier ? (
+            <div className="flex flex-col gap-3">
+              <div className="rounded-xl bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-lg font-bold text-gray-800">{selectedSupplier.name}</p>
+                    <p className="text-xs text-gray-400">Stand {selectedSupplier.stand} · {selectedSupplier.product_type || '—'}</p>
+                  </div>
+                  <button onClick={() => setSelectedSupplier(null)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 text-xs">Cambiar</button>
                 </div>
-                <svg className="h-5 w-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+              </div>
+
+              {selectedSupplier.pending_topics && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-xs font-semibold text-amber-700">Temas pendientes — no olvidar durante la reunión</p>
+                  <p className="mt-1 text-sm text-amber-900 whitespace-pre-wrap">{selectedSupplier.pending_topics}</p>
+                </div>
+              )}
+
+              {selectedSupplier.supplier_notes && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                  <p className="text-xs font-semibold text-blue-700">Notas del proveedor — datos internos</p>
+                  <p className="mt-1 text-sm text-blue-900 whitespace-pre-wrap">{selectedSupplier.supplier_notes}</p>
+                </div>
+              )}
+
+              {!selectedSupplier.pending_topics && !selectedSupplier.supplier_notes && (
+                <p className="py-2 text-center text-xs text-gray-400">Sin notas ni temas pendientes para este proveedor</p>
+              )}
+
+              <button
+                onClick={handleConfirmSupplier}
+                className="w-full rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
+              >
+                INICIAR REUNIÓN
               </button>
-            ))}
-            {suppliers?.length === 0 && (
-              <p className="py-8 text-center text-sm text-gray-400">
-                No hay proveedores. Importa desde Excel en Ajustes.
-              </p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {suppliers?.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => setSelectedSupplier(s)}
+                  className="flex items-center justify-between rounded-lg bg-white p-4 text-left shadow-sm transition-colors hover:bg-gray-50"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-800">{s.name}</p>
+                    <p className="text-xs text-gray-400">
+                      Stand {s.stand} · {s.assigned_person || '—'} · {s.product_type || '—'}
+                    </p>
+                  </div>
+                  <svg className="h-5 w-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              ))}
+              {suppliers?.length === 0 && (
+                <p className="py-8 text-center text-sm text-gray-400">
+                  No hay proveedores. Importa desde Excel en Ajustes.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <NewSupplierForm currentUser={currentUser} onCreated={createMeetingForSupplier} />

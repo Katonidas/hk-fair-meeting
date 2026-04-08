@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
 import { useSync } from '@/hooks/useSync'
-import type { UserName } from '@/types'
+import type { UserName, Relevance } from '@/types'
 
 interface Props {
   currentUser: UserName
@@ -37,6 +38,7 @@ export default function Home({ currentUser, onLogout }: Props) {
     return enriched
   }, [currentUser])
 
+  const [showNewSupplier, setShowNewSupplier] = useState(false)
   const [productFilter, setProductFilter] = useState('')
   const [sortCol, setSortCol] = useState<string>('name')
   const [sortAsc, setSortAsc] = useState(true)
@@ -140,6 +142,12 @@ export default function Home({ currentUser, onLogout }: Props) {
           <MeetingsList meetings={todayMeetings} navigate={navigate} />
         ) : (
           <>
+            <button
+              onClick={() => setShowNewSupplier(true)}
+              className="mb-3 w-full rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 py-3 text-sm font-medium text-primary transition-colors hover:border-primary hover:bg-primary/10"
+            >
+              + Nuevo proveedor
+            </button>
             <div className="mb-3 flex gap-2">
               <input
                 type="text"
@@ -168,6 +176,133 @@ export default function Home({ currentUser, onLogout }: Props) {
             />
           </>
         )}
+      </div>
+
+      {showNewSupplier && (
+        <NewSupplierModal
+          currentUser={currentUser}
+          onClose={() => setShowNewSupplier(false)}
+          onCreated={(id) => { setShowNewSupplier(false); navigate(`/supplier/${id}`) }}
+        />
+      )}
+    </div>
+  )
+}
+
+function NewSupplierModal({
+  currentUser,
+  onClose,
+  onCreated,
+}: {
+  currentUser: UserName
+  onClose: () => void
+  onCreated: (id: string) => void
+}) {
+  const [name, setName] = useState('')
+  const [stand, setStand] = useState('')
+  const [productType, setProductType] = useState('')
+  const [emails, setEmails] = useState('')
+  const [phone, setPhone] = useState('')
+  const [assignedPerson, setAssignedPerson] = useState('')
+  const [relevance, setRelevance] = useState<Relevance>(2)
+  const [pendingTopics, setPendingTopics] = useState('')
+  const [supplierNotes, setSupplierNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    if (!name.trim()) return
+    setSaving(true)
+    const id = uuid()
+    const now = new Date().toISOString()
+    await db.suppliers.add({
+      id,
+      name: name.trim(),
+      stand: stand.trim(),
+      assigned_person: assignedPerson.trim() || currentUser,
+      product_type: productType.trim(),
+      emails: emails.split(',').map(e => e.trim()).filter(Boolean),
+      phone: phone.trim(),
+      relevance,
+      visit_day: '',
+      visit_slot: '',
+      visited: false,
+      pending_topics: pendingTopics.trim(),
+      interesting_products: '',
+      has_catalogue: false,
+      current_products: '',
+      supplier_notes: supplierNotes.trim(),
+      is_new: true,
+      updated_at: now,
+      updated_by: currentUser,
+      created_at: now,
+      synced_at: null,
+    })
+    onCreated(id)
+  }
+
+  const fieldCls = 'w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-primary focus:outline-none'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
+      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-800">Nuevo proveedor</h3>
+          <button onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">✕</button>
+        </div>
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Nombre *</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} className={fieldCls} placeholder="Shenzhen Tech Co." autoFocus />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Stand</label>
+              <input type="text" value={stand} onChange={e => setStand(e.target.value)} className={fieldCls} placeholder="3F-A12" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Tipo de productos</label>
+              <input type="text" value={productType} onChange={e => setProductType(e.target.value)} className={fieldCls} placeholder="LED, cables..." />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Persona asignada</label>
+              <input type="text" value={assignedPerson} onChange={e => setAssignedPerson(e.target.value)} className={fieldCls} placeholder={currentUser} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Relevancia</label>
+              <div className="flex gap-2">
+                {([1, 2, 3] as const).map(r => (
+                  <button key={r} type="button" onClick={() => setRelevance(r)}
+                    className={`flex-1 rounded-lg py-2.5 text-sm font-bold ${relevance === r
+                      ? r === 1 ? 'bg-red-500 text-white' : r === 2 ? 'bg-yellow-400 text-white' : 'bg-gray-400 text-white'
+                      : 'bg-gray-100 text-gray-400'
+                    }`}>{r}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Email(s) — separados por coma</label>
+            <input type="text" value={emails} onChange={e => setEmails(e.target.value)} className={fieldCls} placeholder="sales@company.com" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Teléfono</label>
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className={fieldCls} placeholder="+86 ..." />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Temas pendientes <span className="font-normal text-gray-400">— incidencias o temas a tratar</span></label>
+            <textarea value={pendingTopics} onChange={e => setPendingTopics(e.target.value)} rows={2} className={fieldCls} placeholder="Reclamación pendiente, revisar precios..." />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Notas del proveedor <span className="font-normal text-gray-400">— datos internos</span></label>
+            <textarea value={supplierNotes} onChange={e => setSupplierNotes(e.target.value)} rows={2} className={fieldCls} placeholder="Fábrica propia, buen servicio posventa..." />
+          </div>
+          <button onClick={handleSave} disabled={saving || !name.trim()}
+            className="mt-1 w-full rounded-lg bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark disabled:opacity-50">
+            {saving ? 'Creando...' : 'Crear proveedor'}
+          </button>
+        </div>
       </div>
     </div>
   )
