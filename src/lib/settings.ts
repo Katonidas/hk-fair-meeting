@@ -46,3 +46,37 @@ export function setCCEmailsSetting(value: string) {
 export function getCCEmailsList(): string[] {
   return getCCEmailsSetting().split('\n').map(e => e.trim()).filter(Boolean)
 }
+
+// Formulas for target cost calculation
+const FORMULA_GAME_KEY = 'hk-fair-formula-game'
+const FORMULA_TICNOVA_KEY = 'hk-fair-formula-ticnova'
+
+// Divisors: the number that divides the result after IVA and margin
+// GAME: ((PVPR/1.21)*(1-margin))/1.35
+// TICNOVA: ((PVPR/1.21)*(1-margin))/1.50
+const DEFAULT_FORMULA_GAME = '1.35'
+const DEFAULT_FORMULA_TICNOVA = '1.50'
+
+export function getFormulaGame(): number {
+  return parseFloat(localStorage.getItem(FORMULA_GAME_KEY) || DEFAULT_FORMULA_GAME)
+}
+
+export function setFormulaGame(value: string) {
+  localStorage.setItem(FORMULA_GAME_KEY, value)
+}
+
+export function getFormulaTicnova(): number {
+  return parseFloat(localStorage.getItem(FORMULA_TICNOVA_KEY) || DEFAULT_FORMULA_TICNOVA)
+}
+
+export function setFormulaTicnova(value: string) {
+  localStorage.setItem(FORMULA_TICNOVA_KEY, value)
+}
+
+export function getFormulaGameStr(): string {
+  return localStorage.getItem(FORMULA_GAME_KEY) || DEFAULT_FORMULA_GAME
+}
+
+export function getFormulaTicnovaStr(): string {
+  return localStorage.getItem(FORMULA_TICNOVA_KEY) || DEFAULT_FORMULA_TICNOVA
+}

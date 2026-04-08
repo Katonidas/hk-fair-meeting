@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
-import { getTerms, setTerms as saveTerms, getQOS, setQOS as saveQOS, getCCEmailsSetting, setCCEmailsSetting as saveCCEmails } from '@/lib/settings'
+import { getTerms, setTerms as saveTerms, getQOS, setQOS as saveQOS, getCCEmailsSetting, setCCEmailsSetting as saveCCEmails, getFormulaGameStr, setFormulaGame as saveFormulaGame, getFormulaTicnovaStr, setFormulaTicnova as saveFormulaTicnova } from '@/lib/settings'
 import type { UserName, Relevance } from '@/types'
 
 interface Props {
@@ -19,12 +19,16 @@ export default function Settings({ currentUser }: Props) {
   const [terms, setTermsState] = useState(getTerms())
   const [qos, setQosState] = useState(getQOS())
   const [ccEmails, setCcEmailsState] = useState(getCCEmailsSetting())
+  const [formulaGame, setFormulaGameState] = useState(getFormulaGameStr())
+  const [formulaTicnova, setFormulaTicnovaState] = useState(getFormulaTicnovaStr())
   const [settingsSaved, setSettingsSaved] = useState(false)
 
   function handleSaveEmailSettings() {
     saveTerms(terms)
     saveQOS(qos)
     saveCCEmails(ccEmails)
+    saveFormulaGame(formulaGame)
+    saveFormulaTicnova(formulaTicnova)
     setSettingsSaved(true)
     setTimeout(() => setSettingsSaved(false), 2000)
   }
@@ -214,11 +218,27 @@ export default function Settings({ currentUser }: Props) {
                 className="w-full rounded-lg border border-gray-200 px-3 py-2.5 font-mono text-xs focus:border-primary focus:outline-none"
               />
             </div>
+            <div>
+              <label className="mb-2 block text-xs font-semibold text-gray-700">Fórmulas Target Cost</label>
+              <p className="mb-2 text-[10px] text-gray-400">Fórmula: ((PVPR / 1.21) * (1 - margen)) / divisor. Edita el divisor de cada marca:</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">GAME (divisor)</label>
+                  <input type="number" step="0.01" value={formulaGame} onChange={e => setFormulaGameState(e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 font-mono text-sm focus:border-primary focus:outline-none" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">TICNOVA (divisor)</label>
+                  <input type="number" step="0.01" value={formulaTicnova} onChange={e => setFormulaTicnovaState(e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 font-mono text-sm focus:border-primary focus:outline-none" />
+                </div>
+              </div>
+            </div>
             <button
               onClick={handleSaveEmailSettings}
               className="w-full rounded-lg bg-primary py-3 text-sm font-medium text-white transition-colors hover:bg-primary-light"
             >
-              {settingsSaved ? 'Guardado ✓' : 'Guardar plantilla email'}
+              {settingsSaved ? 'Guardado ✓' : 'Guardar ajustes'}
             </button>
           </div>
         </div>

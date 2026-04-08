@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
+import { getFormulaGame, getFormulaTicnova } from '@/lib/settings'
 import type { SearchedProduct } from '@/types/searchedProduct'
 
 function calcTargetCost(brand: string, pvpr: number | null, marginTarget: string): number | null {
@@ -12,14 +13,13 @@ function calcTargetCost(brand: string, pvpr: number | null, marginTarget: string
   if (isNaN(margin)) return null
   const m = margin > 1 ? margin / 100 : margin
   const brandUpper = brand.toUpperCase().trim()
-  if (brandUpper === 'GAME') {
-    return Math.round(((pvpr / 1.21) * (1 - m)) / 1.35 * 100) / 100
-  }
+  const divisorGame = getFormulaGame()
+  const divisorTicnova = getFormulaTicnova()
   if (brandUpper === 'TICNOVA') {
-    return Math.round(((pvpr / 1.21) * (1 - m)) / 1.50 * 100) / 100
+    return Math.round(((pvpr / 1.21) * (1 - m)) / divisorTicnova * 100) / 100
   }
-  // Default: same as GAME formula
-  return Math.round(((pvpr / 1.21) * (1 - m)) / 1.35 * 100) / 100
+  // GAME and default
+  return Math.round(((pvpr / 1.21) * (1 - m)) / divisorGame * 100) / 100
 }
 
 export default function SearchedProducts() {
@@ -121,6 +121,24 @@ export default function SearchedProducts() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  async function handleExport() {
+    const all = await db.searched_products.toArray()
+    const rows = all.map(p => ({
+      'MARCA': p.brand,
+      'TIPO DE PRODUCTO': p.product_type,
+      'REF / SEGMENTO': p.ref_segment,
+      'MAIN SPECS': p.main_specs,
+      'MARGIN TARGET %': p.margin_target,
+      'PVPR €': p.pvpr,
+      'TARGET COST $': calcTargetCost(p.brand, p.pvpr, p.margin_target)?.toFixed(2) || '',
+      'EXAMPLES': p.examples,
+      'MODEL INTERNO': p.model_interno,
+    }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Productos Buscados')
+    XLSX.writeFile(wb, `productos-buscados-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
   async function handleDelete(id: string) {
     if (!window.confirm('¿Eliminar este producto buscado?')) return
     await db.searched_products.delete(id)
@@ -148,9 +166,15 @@ export default function SearchedProducts() {
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="rounded-lg border border-primary bg-white px-4 py-2.5 text-xs font-medium text-primary"
+            className="cursor-pointer rounded-lg border border-primary bg-white px-4 py-2.5 text-xs font-medium text-primary"
           >
             Importar Excel
+          </button>
+          <button
+            onClick={handleExport}
+            className="cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-xs font-medium text-gray-600"
+          >
+            Exportar Excel
           </button>
         </div>
         {importResult && (

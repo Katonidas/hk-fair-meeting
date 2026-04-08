@@ -23,7 +23,12 @@ body {
   background-color: #f8fafc;
 }
 
-button, a, input, select, textarea {
+button, a, select {
+  min-height: 44px;
+  cursor: pointer;
+}
+
+input, textarea {
   min-height: 44px;
 }
 

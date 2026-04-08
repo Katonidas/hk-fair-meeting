@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
+import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
 import { useSync } from '@/hooks/useSync'
 import type { UserName, Relevance } from '@/types'
@@ -135,9 +136,15 @@ export default function Home({ currentUser, onLogout }: Props) {
         </button>
         <button
           onClick={() => navigate('/searched-products')}
-          className="flex-1 border-b-2 border-transparent pb-2 text-sm font-medium text-gray-400 transition-colors hover:text-primary"
+          className="flex-1 cursor-pointer border-b-2 border-transparent pb-2 text-sm font-medium text-gray-400 transition-colors hover:text-primary"
         >
-          Prod. Buscados
+          Buscados
+        </button>
+        <button
+          onClick={() => navigate('/captured-products')}
+          className="flex-1 cursor-pointer border-b-2 border-transparent pb-2 text-sm font-medium text-gray-400 transition-colors hover:text-primary"
+        >
+          Capturados
         </button>
       </div>
 
@@ -169,12 +176,32 @@ export default function Home({ currentUser, onLogout }: Props) {
           </>
         ) : (
           <>
-            <button
-              onClick={() => setShowNewSupplier(true)}
-              className="mb-3 w-full rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 py-3 text-sm font-medium text-primary transition-colors hover:border-primary hover:bg-primary/10"
-            >
-              + Nuevo proveedor
-            </button>
+            <div className="mb-3 flex gap-2">
+              <button
+                onClick={() => setShowNewSupplier(true)}
+                className="flex-1 cursor-pointer rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 py-3 text-sm font-medium text-primary transition-colors hover:border-primary hover:bg-primary/10"
+              >
+                + Nuevo proveedor
+              </button>
+              <button
+                onClick={async () => {
+                  const all = await db.suppliers.toArray()
+                  const rows = all.map(s => ({
+                    'Nombre': s.name, 'Stand': s.stand, 'Tipo producto': s.product_type,
+                    'Persona asignada': s.assigned_person, 'Emails': s.emails.join(', '),
+                    'Teléfono': s.phone, 'Relevancia': s.relevance, 'Visitado': s.visited ? 'Sí' : 'No',
+                    'Nuevo': s.is_new ? 'Sí' : 'No', 'Temas pendientes': s.pending_topics,
+                    'Notas proveedor': s.supplier_notes,
+                  }))
+                  const wb = XLSX.utils.book_new()
+                  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Proveedores')
+                  XLSX.writeFile(wb, `proveedores-${new Date().toISOString().slice(0, 10)}.xlsx`)
+                }}
+                className="cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-3 text-xs font-medium text-gray-600"
+              >
+                Exportar
+              </button>
+            </div>
             <div className="mb-3 flex gap-2">
               <input
                 type="text"
