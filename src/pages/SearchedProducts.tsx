@@ -146,7 +146,7 @@ export default function SearchedProducts() {
       'MODEL INTERNO': p.model_interno,
     }))
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Productos Buscados')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Productos Deseados')
     XLSX.writeFile(wb, `productos-buscados-${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
@@ -161,7 +161,7 @@ export default function SearchedProducts() {
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/')} className="text-lg font-bold text-primary">HK Fair</button>
           <span className="mx-2 text-gray-300">/</span>
-          <h1 className="text-lg font-bold text-gray-800">Productos Buscados</h1>
+          <h1 className="text-lg font-bold text-gray-800">Productos Deseados</h1>
         </div>
       </header>
 

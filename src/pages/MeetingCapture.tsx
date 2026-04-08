@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
 import { uploadPhoto, compressImage } from '@/lib/storage'
+import { formatDate, formatTime } from '@/lib/format'
 import type { UserName, Product, SampleStatus, Supplier } from '@/types'
 
 interface Props {
@@ -109,7 +110,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
             <div>
               <h1 className="text-sm font-bold text-gray-800">{supplier.name}</h1>
               <p className="text-xs text-gray-400">
-                Stand {supplier.stand} · {meeting.user_name} · {new Date(meeting.visited_at).toLocaleString('es-ES', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                Stand {supplier.stand} · {meeting.user_name} · {formatDate(meeting.visited_at)} {formatTime(meeting.visited_at)}
               </p>
             </div>
           </div>

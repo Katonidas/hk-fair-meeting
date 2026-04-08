@@ -5,6 +5,7 @@ import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
 import { useSync } from '@/hooks/useSync'
+import { formatDate, formatTime } from '@/lib/format'
 import type { UserName, Relevance } from '@/types'
 
 interface Props {
@@ -138,13 +139,13 @@ export default function Home({ currentUser, onLogout }: Props) {
           onClick={() => navigate('/captured-products')}
           className="flex-1 cursor-pointer border-b-2 border-transparent pb-2 text-sm font-medium text-gray-400 transition-colors hover:text-primary"
         >
-          ★ Listado Productos
+          <span className="text-yellow-500">★</span> Listado Productos
         </button>
         <button
           onClick={() => navigate('/searched-products')}
           className="flex-1 cursor-pointer border-b-2 border-transparent pb-2 text-sm font-medium text-gray-400 transition-colors hover:text-primary"
         >
-          🔍 Prod. Buscados
+          🔍 Prod. Deseados
         </button>
       </div>
 
@@ -455,9 +456,10 @@ function MeetingsList({
           <tr className="border-b border-gray-200 bg-gray-50">
             <th className="px-2 py-2 text-left font-semibold text-gray-500">Fecha</th>
             <th className="px-2 py-2 text-left font-semibold text-gray-500">Hora</th>
+            <th className="px-2 py-2 text-left font-semibold text-gray-500">Lugar</th>
             <th className="px-2 py-2 text-left font-semibold text-gray-500">Proveedor</th>
             <th className="px-2 py-2 text-left font-semibold text-gray-500">Persona</th>
-            <th className="px-2 py-2 text-center font-semibold text-gray-500">Productos</th>
+            <th className="px-2 py-2 text-center font-semibold text-gray-500">Prod.</th>
             <th className="px-2 py-2 text-center font-semibold text-gray-500">Email</th>
             <th className="px-2 py-2 text-center font-semibold text-gray-500 w-10"></th>
           </tr>
@@ -465,8 +467,7 @@ function MeetingsList({
         <tbody>
           {meetings.map(m => {
             const isDraft = m.status === 'draft' || !m.status
-            const dateStr = new Date(m.visited_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })
-            const timeStr = new Date(m.visited_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+            const locationLabel = m.location === 'hotel' ? 'Hotel' : 'Feria'
 
             return (
               <tr
@@ -478,11 +479,12 @@ function MeetingsList({
               >
                 <td className="px-2 py-2.5 text-gray-600">
                   <div className="flex items-center gap-1">
-                    {dateStr}
+                    {formatDate(m.visited_at)}
                     {isDraft && <span className="rounded bg-yellow-100 px-1 py-0.5 text-[9px] font-medium text-yellow-700">B</span>}
                   </div>
                 </td>
-                <td className="px-2 py-2.5 text-gray-600">{timeStr}</td>
+                <td className="px-2 py-2.5 text-gray-600">{formatTime(m.visited_at)}</td>
+                <td className="px-2 py-2.5 text-gray-500">{locationLabel}</td>
                 <td className="px-2 py-2.5 font-medium text-gray-800">{m.supplier?.name || '—'}</td>
                 <td className="px-2 py-2.5 text-gray-500">{m.user_name}</td>
                 <td className="px-2 py-2.5 text-center text-gray-600">{m.productCount}</td>

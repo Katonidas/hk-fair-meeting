@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
+import { formatDate, formatTime } from '@/lib/format'
 import type { UserName, Relevance } from '@/types'
 
 interface Props {
@@ -227,7 +228,7 @@ export default function SupplierDetail({ currentUser }: Props) {
         {matchingSearchedProducts && matchingSearchedProducts.length > 0 && (
           <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
             <h2 className="mb-2 text-sm font-semibold text-purple-700">
-              Productos buscados que coinciden ({matchingSearchedProducts.length})
+              Productos deseados que coinciden ({matchingSearchedProducts.length})
             </h2>
             <div className="flex flex-col gap-2">
               {matchingSearchedProducts.map(sp => (
@@ -263,9 +264,7 @@ export default function SupplierDetail({ currentUser }: Props) {
                   <div>
                     <p className="text-sm font-medium text-gray-700">{m.user_name}</p>
                     <p className="text-xs text-gray-400">
-                      {new Date(m.visited_at).toLocaleString('es-ES', {
-                        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-                      })}
+                      {formatDate(m.visited_at)} {formatTime(m.visited_at)}
                       {' · '}{m.productCount} productos
                     </p>
                   </div>
