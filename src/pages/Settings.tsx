@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
+import { getTerms, setTerms as saveTerms, getQOS, setQOS as saveQOS } from '@/lib/settings'
 import type { UserName, Relevance } from '@/types'
 
 interface Props {
@@ -15,6 +16,16 @@ export default function Settings({ currentUser }: Props) {
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [importResult, setImportResult] = useState<string | null>(null)
+  const [terms, setTermsState] = useState(getTerms())
+  const [qos, setQosState] = useState(getQOS())
+  const [settingsSaved, setSettingsSaved] = useState(false)
+
+  function handleSaveEmailSettings() {
+    saveTerms(terms)
+    saveQOS(qos)
+    setSettingsSaved(true)
+    setTimeout(() => setSettingsSaved(false), 2000)
+  }
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -165,6 +176,37 @@ export default function Settings({ currentUser }: Props) {
         <div className="rounded-xl bg-white p-4 shadow-sm">
           <h2 className="mb-2 text-sm font-semibold text-gray-700">Usuario actual</h2>
           <p className="text-sm text-gray-600">{currentUser}</p>
+        </div>
+
+        {/* Email Templates */}
+        <div className="rounded-xl bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold text-gray-700">Plantilla de email</h2>
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Terms & Conditions <span className="font-normal text-gray-400">— aparece en todos los emails</span></label>
+              <textarea
+                value={terms}
+                onChange={e => setTermsState(e.target.value)}
+                rows={6}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 font-mono text-xs focus:border-primary focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Quality of Service <span className="font-normal text-gray-400">— aparece en todos los emails</span></label>
+              <textarea
+                value={qos}
+                onChange={e => setQosState(e.target.value)}
+                rows={5}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 font-mono text-xs focus:border-primary focus:outline-none"
+              />
+            </div>
+            <button
+              onClick={handleSaveEmailSettings}
+              className="w-full rounded-lg bg-primary py-3 text-sm font-medium text-white transition-colors hover:bg-primary-light"
+            >
+              {settingsSaved ? 'Guardado ✓' : 'Guardar plantilla email'}
+            </button>
+          </div>
         </div>
 
         {/* Import */}

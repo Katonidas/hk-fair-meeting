@@ -89,6 +89,14 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
       </header>
 
       <div className="flex-1 space-y-4 px-4 pt-4">
+        {/* Meeting Script */}
+        <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+          <p className="text-xs font-semibold text-primary">GUIÓN DE REUNIÓN</p>
+          <p className="mt-1 text-xs text-primary/80">
+            1. Incidencias / Problemas &nbsp;→&nbsp; 2. Condiciones y Términos &nbsp;→&nbsp; 3. Ofertas de Productos &nbsp;→&nbsp; 4. Muestras
+          </p>
+        </div>
+
         {/* Urgent Notes */}
         <div className="rounded-xl border border-urgent-border bg-urgent p-4">
           <label className="mb-2 block text-sm font-semibold text-amber-800">

@@ -1,4 +1,5 @@
 import type { Meeting, Supplier, Product } from '@/types'
+import { getTerms, getQOS } from './settings'
 
 export function generateEmailSubject(supplier: Supplier): string {
   return `${supplier.name} - APPROX - Meeting HK Fair`
@@ -28,17 +29,10 @@ export function generateEmailBody(
   lines.push('IMPORTANT — Please note our standard terms and conditions.')
   lines.push('All negotiations and agreed conditions are based on the following terms:')
   lines.push('')
-  lines.push('• FOB')
-  lines.push('• CE & RoHS Certificate and Test Report per item')
-  lines.push('• Payment Terms: 10% Deposit + 90% Balance after Inspection before delivery')
-  lines.push('• Warranty: Minimum 1% Free of Charge')
-  lines.push('• Colour Box Packaging included in price')
+  lines.push(getTerms())
   lines.push('')
   lines.push('SERVICE REQUIREMENTS:')
-  lines.push('• Enquiries: reply required within 24 hours')
-  lines.push('• Proforma invoice payment: within 24 hours maximum')
-  lines.push('• Requirement sheets confirmation: within 24 hours')
-  lines.push('• Production time: 35 days from deposit')
+  lines.push(getQOS())
   lines.push('')
 
   if (products.length > 0) {
