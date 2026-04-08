@@ -48,7 +48,7 @@ export function generateEmailBody(
     lines.push('')
 
     for (const p of products) {
-      lines.push(`ITEM: ${p.item_model || '—'}`)
+      lines.push(`PRODUCT: ${p.product_type || '—'} — ITEM: ${p.item_model || '—'}`)
       lines.push(`  PRICE: ${p.price ? `$${p.price} ${p.price_currency}` : '—'}`)
       lines.push(`  FEATURES: ${p.features || '—'}`)
       lines.push(`  MOQ: ${p.moq || '—'}`)

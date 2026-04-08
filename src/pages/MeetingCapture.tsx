@@ -228,7 +228,7 @@ function ProductCard({
         className="flex w-full items-center justify-between text-left"
       >
         <div>
-          <p className="text-sm font-semibold text-gray-800">{product.item_model || 'Sin modelo'}</p>
+          <p className="text-sm font-semibold text-gray-800">{product.product_type ? `${product.product_type} — ` : ''}{product.item_model || 'Sin modelo'}</p>
           <p className="text-xs text-gray-400">
             {product.price ? `$${product.price}` : 'Sin precio'} · MOQ: {product.moq || '—'} · {sampleLabel}
           </p>
@@ -266,6 +266,7 @@ function ProductFormModal({
   product: Product | null
   onClose: () => void
 }) {
+  const [productType, setProductType] = useState(product?.product_type || '')
   const [itemModel, setItemModel] = useState(product?.item_model || '')
   const [price, setPrice] = useState(product?.price?.toString() || '')
   const [targetPrice, setTargetPrice] = useState(product?.target_price?.toString() || '')
@@ -273,12 +274,13 @@ function ProductFormModal({
   const [moq, setMoq] = useState(product?.moq?.toString() || '')
   const [options, setOptions] = useState(product?.options || '')
   const [sampleStatus, setSampleStatus] = useState<SampleStatus>(product?.sample_status || 'no')
-  const [sampleUnits, setSampleUnits] = useState(product?.sample_units?.toString() || '')
+  const [sampleUnits, setSampleUnits] = useState(product?.sample_units?.toString() || '1')
   const [observations, setObservations] = useState(product?.observations || '')
   const [photos, setPhotos] = useState<string[]>(product?.photos || [])
 
   async function handleSave() {
     const data = {
+      product_type: productType.trim(),
       item_model: itemModel.trim(),
       price: price ? parseFloat(price) : null,
       price_currency: 'USD',
@@ -306,10 +308,9 @@ function ProductFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
       <div
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5"
-        onClick={e => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-800">
@@ -319,23 +320,33 @@ function ProductFormModal({
         </div>
 
         <div className="flex flex-col gap-3">
-          <Field label="Item / Model Number" value={itemModel} onChange={setItemModel} placeholder="ABC-123" />
           <div className="grid grid-cols-2 gap-3">
+            <Field label="Tipo de producto" value={productType} onChange={setProductType} placeholder="LED panel, cable..." />
+            <Field label="Item / Model Number" value={itemModel} onChange={setItemModel} placeholder="ABC-123" />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
             <Field label="Precio (USD)" value={price} onChange={setPrice} type="number" placeholder="0.00" />
-            <Field label="Target Price (USD)" value={targetPrice} onChange={setTargetPrice} type="number" placeholder="0.00" />
+            <Field label="Target Price" value={targetPrice} onChange={setTargetPrice} type="number" placeholder="0.00" />
+            <Field label="MOQ" value={moq} onChange={setMoq} type="number" placeholder="500" />
           </div>
           <Field label="Features / Specs" value={features} onChange={setFeatures} multiline placeholder="Material, dimensiones, certificaciones..." />
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="MOQ" value={moq} onChange={setMoq} type="number" placeholder="500" />
-            <Field label="Options (extras)" value={options} onChange={setOptions} placeholder="Color, logo..." />
-          </div>
+          <Field label="Options (extras)" value={options} onChange={setOptions} multiline placeholder="Colores disponibles, logo, packaging custom..." />
 
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">Sample</label>
             <div className="flex gap-2">
+              <div className="w-16 shrink-0">
+                <input
+                  type="number"
+                  value={sampleUnits}
+                  onChange={e => setSampleUnits(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-2 py-2.5 text-center text-sm focus:border-primary focus:outline-none"
+                  min="1"
+                />
+              </div>
               {([
-                ['collected', 'Sí - Recogido'],
-                ['pending', 'Pdte - Enviará'],
+                ['collected', 'Recogido'],
+                ['pending', 'Pdte envío'],
                 ['no', 'No'],
               ] as const).map(([val, label]) => (
                 <button
@@ -353,10 +364,6 @@ function ProductFormModal({
               ))}
             </div>
           </div>
-
-          {sampleStatus !== 'no' && (
-            <Field label="Unidades de sample" value={sampleUnits} onChange={setSampleUnits} type="number" placeholder="2" />
-          )}
 
           {/* Product Photos */}
           <div>

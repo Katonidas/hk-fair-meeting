@@ -114,6 +114,7 @@ export default function Settings({ currentUser }: Props) {
         return {
           'Proveedor': s?.name || '',
           'Stand': s?.stand || '',
+          'Tipo Producto': p.product_type,
           'Item/Model': p.item_model,
           'Precio': p.price,
           'Moneda': p.price_currency,

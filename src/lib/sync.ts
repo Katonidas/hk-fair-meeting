@@ -273,6 +273,7 @@ function toSupabaseProduct(p: Product) {
   return {
     id: p.id,
     meeting_id: p.meeting_id,
+    product_type: p.product_type,
     item_model: p.item_model,
     price: p.price,
     price_currency: p.price_currency,
@@ -292,6 +293,7 @@ function fromSupabaseProduct(r: Record<string, unknown>): Product {
   return {
     id: r.id as string,
     meeting_id: r.meeting_id as string,
+    product_type: (r.product_type as string) || '',
     item_model: (r.item_model as string) || '',
     price: (r.price as number) ?? null,
     price_currency: (r.price_currency as string) || 'USD',

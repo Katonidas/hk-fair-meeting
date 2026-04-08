@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS meetings (
 CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY,
   meeting_id UUID NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+  product_type TEXT DEFAULT '',
   item_model TEXT DEFAULT '',
   price NUMERIC,
   price_currency TEXT DEFAULT 'USD',
