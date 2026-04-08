@@ -1,11 +1,10 @@
 import type { UserName } from '@/types'
 
-export const USERS: UserName[] = ['Carlos', 'Jesús', 'Tote', 'Jose Luis']
+export const USERS: UserName[] = ['Carlos', 'Jesús', 'Jose Luis']
 
 export const CC_EMAILS: Record<UserName, string> = {
   'Carlos': 'carlos@approx.es',
   'Jesús': 'jesus@approx.es',
-  'Tote': 'joseluis@approx.es',
   'Jose Luis': 'joseluis@approx.es',
 }
 

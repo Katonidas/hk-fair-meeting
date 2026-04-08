@@ -6,7 +6,7 @@ const STORAGE_KEY = 'hk-fair-current-user'
 export function useCurrentUser() {
   const [currentUser, setCurrentUserState] = useState<UserName | null>(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored && ['Carlos', 'Jesús', 'Tote', 'Jose Luis'].includes(stored)) {
+    if (stored && ['Carlos', 'Jesús', 'Jose Luis'].includes(stored)) {
       return stored as UserName
     }
     return null

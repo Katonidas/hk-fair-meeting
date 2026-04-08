@@ -1,4 +1,4 @@
-export type UserName = 'Carlos' | 'Jesús' | 'Tote' | 'Jose Luis'
+export type UserName = 'Carlos' | 'Jesús' | 'Jose Luis'
 
 export type SampleStatus = 'collected' | 'pending' | 'no'
 

@@ -39,3 +39,4 @@ lerna-debug.log*
 dev-dist/
 
 .vercel
+.gstack/
