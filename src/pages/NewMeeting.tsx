@@ -45,6 +45,7 @@ export default function NewMeeting({ currentUser }: Props) {
       urgent_notes: '',
       other_notes: '',
       business_card_photo_url: '',
+      stand_photo_url: '',
       email_generated: false,
       email_sent_at: null,
       created_at: now,

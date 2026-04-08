@@ -42,6 +42,7 @@ export interface Meeting {
   urgent_notes: string
   other_notes: string
   business_card_photo_url: string
+  stand_photo_url: string
   email_generated: boolean
   email_sent_at: string | null
   created_at: string

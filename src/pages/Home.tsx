@@ -434,6 +434,7 @@ function MeetingsList({
       urgent_notes: m.urgent_notes || '',
       other_notes: m.other_notes || '',
       business_card_photo_url: m.business_card_photo_url || '',
+      stand_photo_url: (m as Record<string, unknown>).stand_photo_url as string || '',
       email_generated: false,
       email_sent_at: null,
       created_at: now,

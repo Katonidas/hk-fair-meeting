@@ -148,50 +148,54 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
           </p>
         </div>
 
-        {/* Contact Info + Business Card */}
+        {/* Photos + Contact */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
-          <div className="flex gap-4">
-            {/* Business Card - left half */}
-            <div className="w-1/3 shrink-0">
-              <label className="mb-1 block text-xs font-medium text-gray-500">Tarjeta</label>
-              {meeting.business_card_photo_url ? (
-                <div className="relative">
-                  <img
-                    src={meeting.business_card_photo_url}
-                    alt="Tarjeta"
-                    className="w-full rounded-lg object-cover"
-                    style={{ maxHeight: 120 }}
-                  />
-                  <button
-                    onClick={async () => {
-                      await db.meetings.update(id!, { business_card_photo_url: '', updated_at: new Date().toISOString() })
-                    }}
-                    className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white"
-                  >
-                    x
-                  </button>
-                </div>
-              ) : (
-                <BusinessCardUpload meetingId={id!} />
-              )}
+          <div className="mb-3 flex gap-3">
+            {/* Business Card Photo */}
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-gray-500">Foto Tarjeta</label>
+              <PhotoUpload
+                url={meeting.business_card_photo_url}
+                folder="cards"
+                onUploaded={async (url) => {
+                  await db.meetings.update(id!, { business_card_photo_url: url, updated_at: new Date().toISOString() })
+                }}
+                onRemoved={async () => {
+                  await db.meetings.update(id!, { business_card_photo_url: '', updated_at: new Date().toISOString() })
+                }}
+              />
             </div>
-            {/* Contact fields - right */}
-            <div className="flex flex-1 flex-col gap-2">
-              <div>
-                <label className="mb-0.5 block text-xs font-medium text-gray-500">Contacto</label>
-                <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" placeholder="Mr. Wang" />
-              </div>
-              <div>
-                <label className="mb-0.5 block text-xs font-medium text-gray-500">Email</label>
-                <input type="text" value={contactEmail} onChange={e => setContactEmail(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" placeholder="sales@company.com" />
-              </div>
-              <div>
-                <label className="mb-0.5 block text-xs font-medium text-gray-500">Teléfono</label>
-                <input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" placeholder="+86 ..." />
-              </div>
+            {/* Stand Photo */}
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-gray-500">Foto Stand</label>
+              <PhotoUpload
+                url={meeting.stand_photo_url}
+                folder="cards"
+                onUploaded={async (url) => {
+                  await db.meetings.update(id!, { stand_photo_url: url, updated_at: new Date().toISOString() })
+                }}
+                onRemoved={async () => {
+                  await db.meetings.update(id!, { stand_photo_url: '', updated_at: new Date().toISOString() })
+                }}
+              />
+            </div>
+          </div>
+          {/* Contact fields */}
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="mb-0.5 block text-xs font-medium text-gray-500">Contacto</label>
+              <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" placeholder="Mr. Wang" />
+            </div>
+            <div>
+              <label className="mb-0.5 block text-xs font-medium text-gray-500">Email</label>
+              <input type="text" value={contactEmail} onChange={e => setContactEmail(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" placeholder="sales@company.com" />
+            </div>
+            <div>
+              <label className="mb-0.5 block text-xs font-medium text-gray-500">Teléfono</label>
+              <input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" placeholder="+86 ..." />
             </div>
           </div>
         </div>
@@ -525,7 +529,18 @@ function Field({
   )
 }
 
-function BusinessCardUpload({ meetingId }: { meetingId: string }) {
+function PhotoUpload({
+  url,
+  folder,
+  onUploaded,
+  onRemoved,
+}: {
+  url: string
+  folder: 'cards' | 'products'
+  onUploaded: (url: string) => Promise<void>
+  onRemoved: () => Promise<void>
+}) {
+  const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -535,29 +550,52 @@ function BusinessCardUpload({ meetingId }: { meetingId: string }) {
     setUploading(true)
     try {
       const compressed = await compressImage(file, 1200, 0.8)
-      const url = await uploadPhoto(compressed, 'cards')
-      if (url) {
-        await db.meetings.update(meetingId, {
-          business_card_photo_url: url,
-          updated_at: new Date().toISOString(),
-        })
-      }
+      const uploaded = await uploadPhoto(compressed, folder)
+      if (uploaded) await onUploaded(uploaded)
     } finally {
       setUploading(false)
+      if (cameraRef.current) cameraRef.current.value = ''
+      if (fileRef.current) fileRef.current.value = ''
     }
   }
 
+  if (url) {
+    return (
+      <div className="relative">
+        <img src={url} alt="Foto" className="h-20 w-full rounded-lg object-cover" />
+        <button
+          onClick={onRemoved}
+          className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white"
+        >x</button>
+      </div>
+    )
+  }
+
   return (
-    <>
-      <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
-      <button
-        onClick={() => fileRef.current?.click()}
-        disabled={uploading}
-        className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 py-4 text-sm text-gray-400 transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
-      >
-        {uploading ? 'Subiendo...' : 'Hacer foto de tarjeta'}
-      </button>
-    </>
+    <div className="flex flex-col gap-1">
+      {uploading ? (
+        <div className="flex h-16 items-center justify-center rounded-lg border-2 border-dashed border-gray-200 text-xs text-gray-400">Subiendo...</div>
+      ) : (
+        <>
+          {/* Camera - capture attribute triggers native camera */}
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
+          <button
+            onClick={() => cameraRef.current?.click()}
+            className="flex items-center justify-center gap-1 rounded-lg border border-gray-200 bg-gray-50 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary"
+          >
+            Hacer foto
+          </button>
+          {/* File picker - no capture, opens gallery/file browser */}
+          <input ref={fileRef} type="file" accept="image/*,.heic,.heif" onChange={handleFile} className="hidden" />
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center justify-center gap-1 rounded-lg border border-gray-200 bg-gray-50 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary"
+          >
+            Subir archivo
+          </button>
+        </>
+      )}
+    </div>
   )
 }
 
