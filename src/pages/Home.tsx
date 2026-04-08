@@ -17,7 +17,7 @@ export default function Home({ currentUser, onLogout }: Props) {
   const syncStatus = useSync()
   const [tab, setTab] = useState<Tab>('meetings')
   const [search, setSearch] = useState('')
-  const [meetingFilter, setMeetingFilter] = useState<'all' | 'draft' | 'saved'>('all')
+  const [meetingFilter, setMeetingFilter] = useState<'all' | 'draft' | 'saved'>('saved')
   const navigate = useNavigate()
 
   const allMeetings = useLiveQuery(async () => {
@@ -361,6 +361,8 @@ function MeetingsList({
   }> | undefined
   navigate: (path: string) => void
 }) {
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
+
   if (!meetings || meetings.length === 0) {
     return (
       <div className="py-12 text-center text-gray-400">
@@ -369,6 +371,18 @@ function MeetingsList({
         <p className="text-xs">Pulsa "NUEVA REUNIÓN" para empezar</p>
       </div>
     )
+  }
+
+  async function handleDelete(meetingId: string) {
+    if (!window.confirm('¿Eliminar esta reunión? Se borrarán también todos sus productos. Esta acción no se puede deshacer.')) return
+    await db.products.where('meeting_id').equals(meetingId).delete()
+    await db.meetings.delete(meetingId)
+    setOpenMenu(null)
+  }
+
+  function handleEdit(meetingId: string) {
+    setOpenMenu(null)
+    navigate(`/meeting/${meetingId}?edit=1`)
   }
 
   return (
@@ -380,37 +394,67 @@ function MeetingsList({
         const locationLabel = m.location === 'hotel' ? 'Hotel' : 'Feria'
 
         return (
-          <button
+          <div
             key={m.id}
-            onClick={() => navigate(`/meeting/${m.id}`)}
-            className={`flex items-center justify-between rounded-lg p-4 text-left shadow-sm transition-colors hover:bg-gray-50 ${
+            className={`relative flex items-center rounded-lg p-4 shadow-sm transition-colors ${
               isDraft ? 'border border-dashed border-gray-300 bg-gray-50' : 'bg-white'
             }`}
           >
-            <div className="flex-1">
+            <button
+              onClick={() => navigate(`/meeting/${m.id}`)}
+              className="flex flex-1 items-center justify-between text-left"
+            >
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-gray-800">{m.supplier?.name || 'Proveedor'}</p>
+                  {isDraft && (
+                    <span className="rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-700">BORRADOR</span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400">
+                  {dateStr} {timeStr} · {locationLabel} · Stand {m.supplier?.stand || '—'}
+                </p>
+              </div>
               <div className="flex items-center gap-2">
-                <p className="font-semibold text-gray-800">{m.supplier?.name || 'Proveedor'}</p>
-                {isDraft && (
-                  <span className="rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-700">BORRADOR</span>
-                )}
-              </div>
-              <p className="text-xs text-gray-400">
-                {dateStr} {timeStr} · {locationLabel} · Stand {m.supplier?.stand || '—'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
-                {m.productCount} prod
-              </span>
-              <div className="flex flex-col items-center gap-0.5">
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                  {m.productCount} prod
+                </span>
                 {m.email_generated ? (
-                  <span className="text-xs text-green-600 font-bold" title="Email enviado">Email ✓</span>
+                  <span className="text-xs font-bold text-green-600">Email ✓</span>
                 ) : (
-                  <span className="text-xs text-gray-300" title="Email no enviado">Email —</span>
+                  <span className="text-xs text-gray-300">Email —</span>
                 )}
               </div>
+            </button>
+
+            {/* Three dots menu */}
+            <div className="relative ml-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === m.id ? null : m.id) }}
+                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
+              >
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z" />
+                </svg>
+              </button>
+              {openMenu === m.id && (
+                <div className="absolute right-0 top-10 z-20 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                  <button
+                    onClick={() => handleEdit(m.id)}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => handleDelete(m.id)}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              )}
             </div>
-          </button>
+          </div>
         )
       })}
     </div>

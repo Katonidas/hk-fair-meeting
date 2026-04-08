@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
@@ -13,6 +13,8 @@ interface Props {
 export default function MeetingCapture({ currentUser: _currentUser }: Props) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const [editMode, setEditMode] = useState(false)
 
   const meeting = useLiveQuery(() => (id ? db.meetings.get(id) : undefined), [id])
   const supplier = useLiveQuery(
@@ -80,6 +82,14 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
     return () => clearTimeout(timer)
   }, [urgentNotes, otherNotes, autoSave])
 
+  // Drafts are always editable, saved meetings need explicit edit mode
+  const isSaved = meeting?.status === 'saved'
+  const isEditable = !isSaved || editMode || searchParams.get('edit') === '1'
+
+  useEffect(() => {
+    if (searchParams.get('edit') === '1') setEditMode(true)
+  }, [searchParams])
+
   if (!meeting || !supplier) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -106,15 +116,32 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
               </p>
             </div>
           </div>
-          {saved && (
-            <span className="rounded-full bg-green-50 px-2 py-1 text-xs text-green-600">
-              Guardado ✓
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {saved && (
+              <span className="rounded-full bg-green-50 px-2 py-1 text-xs text-green-600">
+                Guardado ✓
+              </span>
+            )}
+            {isSaved && !isEditable && (
+              <button
+                onClick={() => setEditMode(true)}
+                className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
+              >
+                Editar
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      <div className="flex-1 space-y-4 px-4 pt-4">
+      <div className={`flex-1 space-y-4 px-4 pt-4 ${!isEditable ? 'pointer-events-none opacity-75' : ''}`}>
+        {/* Read-only banner */}
+        {isSaved && !isEditable && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-center text-xs text-blue-700">
+            Reunión guardada — pulsa "Editar" arriba para modificar
+          </div>
+        )}
+
         {/* Meeting Script */}
         <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
           <p className="text-xs font-semibold text-primary">GUIÓN DE REUNIÓN</p>
@@ -243,31 +270,49 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
         />
       )}
 
-      {/* Footer - Save + Preview Email */}
+      {/* Footer */}
       <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white px-4 py-3 shadow-lg">
-        <div className="flex gap-3">
-          <button
-            onClick={async () => {
-              await autoSave()
-              if (id) {
-                await db.meetings.update(id, { status: 'saved', updated_at: new Date().toISOString() })
-              }
-              navigate('/')
-            }}
-            className="flex-1 rounded-xl border border-gray-200 bg-white py-4 text-base font-medium text-gray-600 transition-colors hover:bg-gray-50"
-          >
-            Guardar reunión
-          </button>
-          <button
-            onClick={async () => {
-              await autoSave()
-              navigate(`/meeting/${id}/email`)
-            }}
-            className="flex-1 rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
-          >
-            Previsualizar EMAIL
-          </button>
-        </div>
+        {isEditable ? (
+          <div className="flex gap-3">
+            <button
+              onClick={async () => {
+                await autoSave()
+                if (id) {
+                  await db.meetings.update(id, { status: 'saved', updated_at: new Date().toISOString() })
+                }
+                setEditMode(false)
+                navigate('/')
+              }}
+              className="flex-1 rounded-xl border border-gray-200 bg-white py-4 text-base font-medium text-gray-600 transition-colors hover:bg-gray-50"
+            >
+              Guardar reunión
+            </button>
+            <button
+              onClick={async () => {
+                await autoSave()
+                navigate(`/meeting/${id}/email`)
+              }}
+              className="flex-1 rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
+            >
+              Previsualizar EMAIL
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-3">
+            <button
+              onClick={() => setEditMode(true)}
+              className="flex-1 rounded-xl border border-gray-200 bg-white py-4 text-base font-medium text-gray-600 transition-colors hover:bg-gray-50"
+            >
+              Editar reunión
+            </button>
+            <button
+              onClick={() => navigate(`/meeting/${id}/email`)}
+              className="flex-1 rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
+            >
+              Previsualizar EMAIL
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
