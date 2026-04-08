@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
+import { uploadPhoto, compressImage } from '@/lib/storage'
 import type { UserName, Product, SampleStatus } from '@/types'
 
 interface Props {
@@ -114,6 +115,33 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none"
             placeholder="Buena calidad general, fábrica propia, catálogo amplio..."
           />
+        </div>
+
+        {/* Business Card Photo */}
+        <div className="rounded-xl bg-white p-4 shadow-sm">
+          <label className="mb-2 block text-sm font-semibold text-gray-700">
+            Foto de tarjeta de visita
+          </label>
+          {meeting.business_card_photo_url ? (
+            <div className="relative">
+              <img
+                src={meeting.business_card_photo_url}
+                alt="Tarjeta de visita"
+                className="w-full rounded-lg object-cover"
+                style={{ maxHeight: 200 }}
+              />
+              <button
+                onClick={async () => {
+                  await db.meetings.update(id!, { business_card_photo_url: '', updated_at: new Date().toISOString() })
+                }}
+                className="absolute right-2 top-2 rounded-full bg-black/50 p-1 text-white"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <BusinessCardUpload meetingId={id!} />
+          )}
         </div>
 
         {/* Products */}
@@ -247,6 +275,7 @@ function ProductFormModal({
   const [sampleStatus, setSampleStatus] = useState<SampleStatus>(product?.sample_status || 'no')
   const [sampleUnits, setSampleUnits] = useState(product?.sample_units?.toString() || '')
   const [observations, setObservations] = useState(product?.observations || '')
+  const [photos, setPhotos] = useState<string[]>(product?.photos || [])
 
   async function handleSave() {
     const data = {
@@ -260,7 +289,7 @@ function ProductFormModal({
       sample_status: sampleStatus,
       sample_units: sampleUnits ? parseInt(sampleUnits) : null,
       observations: observations.trim(),
-      photos: product?.photos || [],
+      photos,
     }
 
     if (product) {
@@ -329,6 +358,12 @@ function ProductFormModal({
             <Field label="Unidades de sample" value={sampleUnits} onChange={setSampleUnits} type="number" placeholder="2" />
           )}
 
+          {/* Product Photos */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Fotos del producto</label>
+            <ProductPhotoUpload photos={photos} onPhotosChange={setPhotos} />
+          </div>
+
           <Field label="Observaciones" value={observations} onChange={setObservations} multiline placeholder="Notas adicionales sobre el producto..." />
 
           <button
@@ -367,6 +402,101 @@ function Field({
       ) : (
         <input type={type} value={value} onChange={e => onChange(e.target.value)} className={cls} placeholder={placeholder} />
       )}
+    </div>
+  )
+}
+
+function BusinessCardUpload({ meetingId }: { meetingId: string }) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const compressed = await compressImage(file, 1200, 0.8)
+      const url = await uploadPhoto(compressed, 'cards')
+      if (url) {
+        await db.meetings.update(meetingId, {
+          business_card_photo_url: url,
+          updated_at: new Date().toISOString(),
+        })
+      }
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <>
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
+      <button
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 py-4 text-sm text-gray-400 transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+      >
+        {uploading ? 'Subiendo...' : 'Hacer foto de tarjeta'}
+      </button>
+    </>
+  )
+}
+
+function ProductPhotoUpload({
+  photos,
+  onPhotosChange,
+}: {
+  photos: string[]
+  onPhotosChange: (photos: string[]) => void
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    setUploading(true)
+    try {
+      const newUrls: string[] = []
+      for (const file of Array.from(files)) {
+        const compressed = await compressImage(file, 1200, 0.8)
+        const url = await uploadPhoto(compressed, 'products')
+        if (url) newUrls.push(url)
+      }
+      onPhotosChange([...photos, ...newUrls])
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  return (
+    <div>
+      {photos.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {photos.map((url, i) => (
+            <div key={i} className="relative">
+              <img src={url} alt={`Foto ${i + 1}`} className="h-16 w-16 rounded-lg object-cover" />
+              <button
+                type="button"
+                onClick={() => onPhotosChange(photos.filter((_, idx) => idx !== i))}
+                className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white"
+              >
+                x
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple onChange={handleFiles} className="hidden" />
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 py-3 text-xs text-gray-400 transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+      >
+        {uploading ? 'Subiendo...' : 'Añadir fotos'}
+      </button>
     </div>
   )
 }
