@@ -20,6 +20,9 @@ export default function Home({ currentUser, onLogout }: Props) {
   const [tab, setTab] = useState<Tab>('meetings')
   const [search, setSearch] = useState('')
   const [meetingFilter, setMeetingFilter] = useState<'all' | 'draft' | 'saved'>('saved')
+  const [meetingSearch, setMeetingSearch] = useState('')
+  const [meetingSortCol, setMeetingSortCol] = useState('visited_at')
+  const [meetingSortAsc, setMeetingSortAsc] = useState(false)
   const navigate = useNavigate()
 
   const allMeetings = useLiveQuery(async () => {
@@ -166,14 +169,34 @@ export default function Home({ currentUser, onLogout }: Props) {
                 </button>
               ))}
             </div>
+            <input
+              type="text"
+              placeholder="Filtrar por proveedor, fecha o persona..."
+              value={meetingSearch}
+              onChange={e => setMeetingSearch(e.target.value)}
+              className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:outline-none"
+            />
             <MeetingsList
-              meetings={allMeetings?.filter(m =>
-                meetingFilter === 'all' ? true :
-                meetingFilter === 'saved' ? m.status === 'saved' :
-                m.status === 'draft' || !m.status
-              )}
+              meetings={allMeetings?.filter(m => {
+                const statusOk = meetingFilter === 'all' ? true :
+                  meetingFilter === 'saved' ? m.status === 'saved' :
+                  m.status === 'draft' || !m.status
+                if (!statusOk) return false
+                if (!meetingSearch) return true
+                const q = meetingSearch.toLowerCase()
+                const supplierName = (m.supplier?.name || '').toLowerCase()
+                const dateStr = formatDate(m.visited_at).toLowerCase()
+                const person = (m.user_name || '').toLowerCase()
+                return supplierName.includes(q) || dateStr.includes(q) || person.includes(q)
+              })}
               navigate={navigate}
               currentUser={currentUser}
+              sortCol={meetingSortCol}
+              sortAsc={meetingSortAsc}
+              onSort={(col) => {
+                if (col === meetingSortCol) setMeetingSortAsc(!meetingSortAsc)
+                else { setMeetingSortCol(col); setMeetingSortAsc(true) }
+              }}
             />
           </>
         ) : (
@@ -384,6 +407,9 @@ function MeetingsList({
   meetings,
   navigate,
   currentUser,
+  sortCol,
+  sortAsc,
+  onSort,
 }: {
   meetings: Array<{
     id: string
@@ -401,6 +427,9 @@ function MeetingsList({
   }> | undefined
   navigate: (path: string) => void
   currentUser: string
+  sortCol: string
+  sortAsc: boolean
+  onSort: (col: string) => void
 }) {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
 
@@ -450,23 +479,39 @@ function MeetingsList({
     navigate(`/meeting/${newId}?edit=1`)
   }
 
+  const sorted = [...meetings].sort((a, b) => {
+    let cmp = 0
+    switch (sortCol) {
+      case 'visited_at': cmp = a.visited_at.localeCompare(b.visited_at); break
+      case 'supplier': cmp = (a.supplier?.name || '').localeCompare(b.supplier?.name || ''); break
+      case 'user_name': cmp = a.user_name.localeCompare(b.user_name); break
+      case 'productCount': cmp = a.productCount - b.productCount; break
+      case 'email': cmp = (a.email_generated ? 1 : 0) - (b.email_generated ? 1 : 0); break
+      case 'location': cmp = (a.location || '').localeCompare(b.location || ''); break
+    }
+    return sortAsc ? cmp : -cmp
+  })
+
+  const arrow = (col: string) => sortCol === col ? (sortAsc ? ' ↑' : ' ↓') : ''
+  const thCls = "px-2 py-2 text-left font-semibold text-gray-500 cursor-pointer whitespace-nowrap hover:text-primary"
+
   return (
     <div className="-mx-4 overflow-x-auto">
-      <table className="w-full min-w-[650px] text-xs">
+      <table className="w-full min-w-[700px] text-xs">
         <thead>
           <tr className="border-b border-gray-200 bg-gray-50">
-            <th className="px-2 py-2 text-left font-semibold text-gray-500">Fecha</th>
-            <th className="px-2 py-2 text-left font-semibold text-gray-500">Hora</th>
-            <th className="px-2 py-2 text-left font-semibold text-gray-500">Lugar</th>
-            <th className="px-2 py-2 text-left font-semibold text-gray-500">Proveedor</th>
-            <th className="px-2 py-2 text-left font-semibold text-gray-500">Persona</th>
-            <th className="px-2 py-2 text-center font-semibold text-gray-500">Prod.</th>
-            <th className="px-2 py-2 text-center font-semibold text-gray-500">Email</th>
+            <th className={thCls} onClick={() => onSort('visited_at')}>Fecha{arrow('visited_at')}</th>
+            <th className={`${thCls}`} onClick={() => onSort('visited_at')}>Hora</th>
+            <th className={thCls} onClick={() => onSort('location')}>Lugar{arrow('location')}</th>
+            <th className={thCls} onClick={() => onSort('supplier')}>Proveedor{arrow('supplier')}</th>
+            <th className={thCls} onClick={() => onSort('user_name')}>Persona{arrow('user_name')}</th>
+            <th className={`${thCls} text-center`} onClick={() => onSort('productCount')}>Prod.{arrow('productCount')}</th>
+            <th className={`${thCls} text-center`} onClick={() => onSort('email')}>Email{arrow('email')}</th>
             <th className="px-2 py-2 text-center font-semibold text-gray-500 w-10"></th>
           </tr>
         </thead>
         <tbody>
-          {meetings.map(m => {
+          {sorted.map(m => {
             const isDraft = m.status === 'draft' || !m.status
             const locationLabel = m.location === 'hotel' ? 'Hotel' : 'Feria'
 
