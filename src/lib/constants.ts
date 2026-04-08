@@ -1,4 +1,5 @@
 import type { UserName } from '@/types'
+import { getCCEmailsList } from './settings'
 
 export const USERS: UserName[] = ['Carlos', 'Jesús', 'Jose Luis']
 
@@ -8,14 +9,7 @@ export const CC_EMAILS: Record<UserName, string> = {
   'Jose Luis': 'joseluis@approx.es',
 }
 
-export const ALL_CC_EMAILS = [
-  'joseluis@approx.es',
-  'carlos@approx.es',
-  'chen@approx.es',
-  'jesus@approx.es',
-]
-
 export function getCCEmails(currentUser: UserName): string[] {
   const userEmail = CC_EMAILS[currentUser]
-  return ALL_CC_EMAILS.filter(email => email !== userEmail)
+  return getCCEmailsList().filter(email => email !== userEmail)
 }

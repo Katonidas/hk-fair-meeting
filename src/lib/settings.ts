@@ -27,3 +27,22 @@ export function getQOS(): string {
 export function setQOS(value: string) {
   localStorage.setItem(QOS_KEY, value)
 }
+
+const CC_KEY = 'hk-fair-cc-emails'
+
+const DEFAULT_CC = `joseluis@approx.es
+carlos@approx.es
+chen@approx.es
+jesus@approx.es`
+
+export function getCCEmailsSetting(): string {
+  return localStorage.getItem(CC_KEY) || DEFAULT_CC
+}
+
+export function setCCEmailsSetting(value: string) {
+  localStorage.setItem(CC_KEY, value)
+}
+
+export function getCCEmailsList(): string[] {
+  return getCCEmailsSetting().split('\n').map(e => e.trim()).filter(Boolean)
+}

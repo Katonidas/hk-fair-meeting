@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
-import { getTerms, setTerms as saveTerms, getQOS, setQOS as saveQOS } from '@/lib/settings'
+import { getTerms, setTerms as saveTerms, getQOS, setQOS as saveQOS, getCCEmailsSetting, setCCEmailsSetting as saveCCEmails } from '@/lib/settings'
 import type { UserName, Relevance } from '@/types'
 
 interface Props {
@@ -18,11 +18,13 @@ export default function Settings({ currentUser }: Props) {
   const [importResult, setImportResult] = useState<string | null>(null)
   const [terms, setTermsState] = useState(getTerms())
   const [qos, setQosState] = useState(getQOS())
+  const [ccEmails, setCcEmailsState] = useState(getCCEmailsSetting())
   const [settingsSaved, setSettingsSaved] = useState(false)
 
   function handleSaveEmailSettings() {
     saveTerms(terms)
     saveQOS(qos)
+    saveCCEmails(ccEmails)
     setSettingsSaved(true)
     setTimeout(() => setSettingsSaved(false), 2000)
   }
@@ -197,6 +199,15 @@ export default function Settings({ currentUser }: Props) {
                 value={qos}
                 onChange={e => setQosState(e.target.value)}
                 rows={5}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 font-mono text-xs focus:border-primary focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Destinatarios CC <span className="font-normal text-gray-400">— un email por línea, se excluye automáticamente el usuario actual</span></label>
+              <textarea
+                value={ccEmails}
+                onChange={e => setCcEmailsState(e.target.value)}
+                rows={4}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2.5 font-mono text-xs focus:border-primary focus:outline-none"
               />
             </div>
