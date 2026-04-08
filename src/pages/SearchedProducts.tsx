@@ -38,31 +38,67 @@ export default function SearchedProducts() {
       const workbook = XLSX.read(data)
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet)
+
+      if (rows.length === 0) {
+        setImportResult('Error: El archivo está vacío o no se pudieron leer filas')
+        return
+      }
+
+      // Show detected columns for debugging
+      const cols = Object.keys(rows[0])
+      console.log('Columnas detectadas:', cols)
+
       let count = 0
+      let skipped = 0
       const now = new Date().toISOString()
 
       for (const row of rows) {
-        const productType = String(row['TIPO DE PRODUCTO'] || row['product_type'] || row['tipo'] || row['Tipo de producto'] || '').trim()
-        if (!productType) continue
+        // Flexible column matching: try to find a value by checking multiple possible column names
+        const get = (...keys: string[]) => {
+          for (const k of keys) {
+            // Exact match
+            if (row[k] !== undefined && row[k] !== null && row[k] !== '') return String(row[k]).trim()
+            // Case-insensitive match
+            const found = Object.keys(row).find(col => col.toLowerCase().replace(/[^a-z0-9]/g, '') === k.toLowerCase().replace(/[^a-z0-9]/g, ''))
+            if (found && row[found] !== undefined && row[found] !== null && row[found] !== '') return String(row[found]).trim()
+          }
+          return ''
+        }
+
+        const brand = get('MARCA', 'marca', 'brand', 'Brand')
+        const productType = get('TIPO DE PRODUCTO', 'tipo de producto', 'tipodeproducto', 'product_type', 'tipo', 'Tipo', 'Type', 'type', 'TIPO')
+        const refSegment = get('REF. / SEGMENTO', 'REF / SEGMENTO', 'refsegmento', 'ref_segment', 'Ref', 'ref', 'Segmento', 'segmento', 'REF')
+        const mainSpecs = get('MAIN SPECS', 'mainspecs', 'main_specs', 'Specs', 'specs', 'SPECS', 'especificaciones', 'Especificaciones')
+        const targetCost = get('TARGET COST', 'targetcost', 'target_cost', 'Target Cost', 'target', 'COST', 'cost', 'Coste')
+        const examples = get('EXAMPLES', 'examples', 'Examples', 'ejemplo', 'Ejemplo', 'EJEMPLO')
+        const marginTarget = get('MARGIN TARGET', 'margintarget', 'margin_target', 'Margin', 'margin', 'MARGIN', 'margen', 'Margen')
+        const pvpr = get('PVPR', 'pvpr', 'PVP', 'pvp', 'precio', 'Precio')
+        const modelInterno = get('MODEL INTERNO', 'modelinterno', 'model_interno', 'Modelo', 'modelo', 'MODEL', 'model')
+
+        // Skip completely empty rows, but allow rows with at least one field
+        if (!brand && !productType && !refSegment && !mainSpecs && !modelInterno) {
+          skipped++
+          continue
+        }
 
         await db.searched_products.add({
           id: uuid(),
-          brand: String(row['MARCA'] || row['brand'] || row['Marca'] || '').trim(),
-          product_type: productType,
-          ref_segment: String(row['REF. / SEGMENTO'] || row['ref_segment'] || row['Ref'] || row['Segmento'] || '').trim(),
-          main_specs: String(row['MAIN SPECS'] || row['main_specs'] || row['Specs'] || row['specs'] || '').trim(),
-          target_cost: parseNum(row['TARGET COST'] || row['target_cost'] || row['Target Cost']),
-          examples: String(row['EXAMPLES'] || row['examples'] || row['Examples'] || '').trim(),
-          margin_target: String(row['MARGIN TARGET'] || row['margin_target'] || row['Margin'] || '').trim(),
-          pvpr: parseNum(row['PVPR'] || row['pvpr'] || row['PVP']),
-          model_interno: String(row['MODEL INTERNO'] || row['model_interno'] || row['Modelo'] || '').trim(),
+          brand,
+          product_type: productType || 'Sin tipo',
+          ref_segment: refSegment,
+          main_specs: mainSpecs,
+          target_cost: targetCost ? parseFloat(targetCost.replace(/[^0-9.,]/g, '').replace(',', '.')) || null : null,
+          examples,
+          margin_target: marginTarget,
+          pvpr: pvpr ? parseFloat(pvpr.replace(/[^0-9.,]/g, '').replace(',', '.')) || null : null,
+          model_interno: modelInterno,
           created_at: now,
           updated_at: now,
           synced_at: null,
         })
         count++
       }
-      setImportResult(`${count} productos importados`)
+      setImportResult(`${count} productos importados${skipped ? ` (${skipped} filas vacías ignoradas)` : ''}. Columnas detectadas: ${cols.join(', ')}`)
     } catch (err) {
       setImportResult(`Error: ${err instanceof Error ? err.message : 'desconocido'}`)
     }
@@ -291,8 +327,3 @@ function SearchedProductForm({
   )
 }
 
-function parseNum(val: unknown): number | null {
-  if (val === null || val === undefined || val === '') return null
-  const n = Number(val)
-  return isNaN(n) ? null : n
-}
