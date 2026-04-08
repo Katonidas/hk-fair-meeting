@@ -187,6 +187,17 @@ export default function SearchedProducts() {
           >
             Exportar Excel
           </button>
+          <button
+            onClick={async () => {
+              const pwd = window.prompt('Contraseña para borrar todos los productos buscados:')
+              if (pwd !== 'APPROX') { if (pwd !== null) window.alert('Contraseña incorrecta'); return }
+              if (!window.confirm('¿Borrar TODOS los productos buscados?')) return
+              await db.searched_products.clear()
+            }}
+            className="cursor-pointer rounded-lg border border-red-300 bg-white px-4 py-2.5 text-xs font-medium text-red-500"
+          >
+            Borrar todos
+          </button>
         </div>
         {importResult && (
           <p className={`mb-3 text-xs ${importResult.startsWith('Error') ? 'text-red-500' : 'text-green-600'}`}>{importResult}</p>
@@ -215,11 +226,11 @@ export default function SearchedProducts() {
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="px-2 py-2 text-left font-semibold text-gray-500">Marca</th>
                   <th className="px-2 py-2 text-left font-semibold text-gray-500">Tipo Producto</th>
-                  <th className="px-2 py-2 text-left font-semibold text-gray-500">Ref/Seg.</th>
+                  <th className="px-2 py-2 text-left font-semibold text-gray-500 w-16">Ref.</th>
                   <th className="px-2 py-2 text-left font-semibold text-gray-500">Specs</th>
                   <th className="px-2 py-2 text-right font-bold text-gray-700">Target Compra USD</th>
-                  <th className="px-2 py-2 text-right font-semibold text-gray-500">Margen %</th>
-                  <th className="px-2 py-2 text-right font-semibold text-gray-500">PVPR €</th>
+                  <th className="px-2 py-2 text-right font-semibold text-gray-500 w-20">Margen %</th>
+                  <th className="px-2 py-2 text-right font-semibold text-gray-500 w-20">PVPR €</th>
                   <th className="px-2 py-2 text-left font-semibold text-gray-500">Modelo</th>
                   <th className="px-2 py-2 text-center font-semibold text-gray-500 w-16"></th>
                 </tr>
@@ -235,11 +246,45 @@ export default function SearchedProducts() {
                     >
                       <td className="px-2 py-2.5 font-medium text-gray-800">{p.brand || '—'}</td>
                       <td className="px-2 py-2.5 text-gray-600">{p.product_type}</td>
-                      <td className="px-2 py-2.5 text-gray-500">{p.ref_segment || '—'}</td>
-                      <td className="px-2 py-2.5 text-gray-500 max-w-[120px] truncate">{p.main_specs || '—'}</td>
+                      <td className="px-2 py-2.5 text-gray-500 max-w-[60px] truncate">{p.ref_segment || '—'}</td>
+                      <td className="group relative px-2 py-2.5 text-gray-500 max-w-[200px] truncate">
+                        {p.main_specs || '—'}
+                        {p.main_specs && (
+                          <div className="pointer-events-none invisible absolute left-0 top-full z-30 mt-1 w-72 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg group-hover:visible whitespace-pre-wrap">
+                            {p.main_specs}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-2 py-2.5 text-right font-bold text-green-700">{computed ? `$${computed.toFixed(2)}` : '—'}</td>
-                      <td className="px-2 py-2.5 text-right text-gray-600">{formatMarginDisplay(p.margin_target)}</td>
-                      <td className="px-2 py-2.5 text-right text-gray-600">{p.pvpr ? `${p.pvpr.toFixed(2)}€` : '—'}</td>
+                      <td className="px-2 py-1" onClick={e => e.stopPropagation()}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={p.margin_target}
+                          onBlur={async (e) => {
+                            const val = e.target.value.trim()
+                            if (val !== p.margin_target) {
+                              await db.searched_products.update(p.id, { margin_target: val, updated_at: new Date().toISOString() })
+                            }
+                          }}
+                          className="w-full rounded border border-gray-200 px-1 py-1 text-right text-xs focus:border-primary focus:outline-none"
+                        />
+                      </td>
+                      <td className="px-2 py-1" onClick={e => e.stopPropagation()}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={p.pvpr ?? ''}
+                          onBlur={async (e) => {
+                            const val = e.target.value.trim()
+                            const num = val ? parseFloat(val) : null
+                            if (num !== p.pvpr) {
+                              await db.searched_products.update(p.id, { pvpr: num, updated_at: new Date().toISOString() })
+                            }
+                          }}
+                          className="w-full rounded border border-gray-200 px-1 py-1 text-right text-xs focus:border-primary focus:outline-none"
+                        />
+                      </td>
                       <td className="px-2 py-2.5 text-gray-500">{p.model_interno || '—'}</td>
                       <td className="px-2 py-2.5 text-center" onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1 justify-center">
