@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS meetings (
   id UUID PRIMARY KEY,
   supplier_id UUID NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
   user_name TEXT NOT NULL,
+  location TEXT DEFAULT 'feria',
   visited_at TIMESTAMPTZ DEFAULT NOW(),
   urgent_notes TEXT DEFAULT '',
   other_notes TEXT DEFAULT '',

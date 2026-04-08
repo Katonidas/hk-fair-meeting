@@ -3,7 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
-import type { UserName, Supplier } from '@/types'
+import type { UserName, Supplier, MeetingLocation } from '@/types'
+
+function getLocalDatetime() {
+  const d = new Date()
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 interface Props {
   currentUser: UserName
@@ -12,6 +18,8 @@ interface Props {
 export default function NewMeeting({ currentUser }: Props) {
   const [mode, setMode] = useState<'select' | 'new'>('select')
   const [search, setSearch] = useState('')
+  const [meetingDatetime, setMeetingDatetime] = useState(getLocalDatetime())
+  const [meetingLocation, setMeetingLocation] = useState<MeetingLocation>('feria')
   const navigate = useNavigate()
 
   const suppliers = useLiveQuery(async () => {
@@ -26,11 +34,13 @@ export default function NewMeeting({ currentUser }: Props) {
   async function createMeetingForSupplier(supplierId: string) {
     const meetingId = uuid()
     const now = new Date().toISOString()
+    const visitedAt = new Date(meetingDatetime).toISOString()
     await db.meetings.add({
       id: meetingId,
       supplier_id: supplierId,
       user_name: currentUser,
-      visited_at: now,
+      location: meetingLocation,
+      visited_at: visitedAt,
       urgent_notes: '',
       other_notes: '',
       business_card_photo_url: '',
@@ -59,6 +69,30 @@ export default function NewMeeting({ currentUser }: Props) {
           <h1 className="text-lg font-bold text-gray-800">Nueva Reunión</h1>
         </div>
       </header>
+
+      {/* Date/Time & Location */}
+      <div className="flex gap-3 px-4 pt-4">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium text-gray-500">Fecha y hora</label>
+          <input
+            type="datetime-local"
+            value={meetingDatetime}
+            onChange={e => setMeetingDatetime(e.target.value)}
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+          />
+        </div>
+        <div className="w-32">
+          <label className="mb-1 block text-xs font-medium text-gray-500">Lugar</label>
+          <select
+            value={meetingLocation}
+            onChange={e => setMeetingLocation(e.target.value as MeetingLocation)}
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="feria">Feria</option>
+            <option value="hotel">Hotel</option>
+          </select>
+        </div>
+      </div>
 
       {/* Toggle */}
       <div className="flex gap-2 px-4 pt-4">

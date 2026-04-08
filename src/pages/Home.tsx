@@ -37,14 +37,34 @@ export default function Home({ currentUser, onLogout }: Props) {
     return enriched
   }, [currentUser])
 
+  const [productFilter, setProductFilter] = useState('')
+  const [sortCol, setSortCol] = useState<string>('name')
+  const [sortAsc, setSortAsc] = useState(true)
+
   const suppliers = useLiveQuery(async () => {
     const all = await db.suppliers.toArray()
-    if (!search) return all.sort((a, b) => a.name.localeCompare(b.name))
-    const q = search.toLowerCase()
-    return all
-      .filter(s => s.name.toLowerCase().includes(q) || s.stand.toLowerCase().includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [search])
+    const allMeetings = await db.meetings.toArray()
+
+    const enriched = all.map(s => {
+      const sMeetings = allMeetings.filter(m => m.supplier_id === s.id)
+      return {
+        ...s,
+        visited_feria: sMeetings.some(m => m.location === 'feria'),
+        visited_hotel: sMeetings.some(m => m.location === 'hotel'),
+      }
+    })
+
+    let filtered = enriched
+    if (search) {
+      const q = search.toLowerCase()
+      filtered = filtered.filter(s => s.name.toLowerCase().includes(q) || s.stand.toLowerCase().includes(q))
+    }
+    if (productFilter) {
+      const pf = productFilter.toLowerCase()
+      filtered = filtered.filter(s => s.product_type.toLowerCase().includes(pf))
+    }
+    return filtered
+  }, [search, productFilter])
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-light">
@@ -120,14 +140,32 @@ export default function Home({ currentUser, onLogout }: Props) {
           <MeetingsList meetings={todayMeetings} navigate={navigate} />
         ) : (
           <>
-            <input
-              type="text"
-              placeholder="Buscar proveedor o stand..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm focus:border-primary focus:outline-none"
+            <div className="mb-3 flex gap-2">
+              <input
+                type="text"
+                placeholder="Buscar proveedor o stand..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm focus:border-primary focus:outline-none"
+              />
+              <input
+                type="text"
+                placeholder="Filtrar tipo producto..."
+                value={productFilter}
+                onChange={e => setProductFilter(e.target.value)}
+                className="w-40 rounded-lg border border-gray-200 bg-white px-3 py-3 text-sm focus:border-primary focus:outline-none"
+              />
+            </div>
+            <SuppliersTable
+              suppliers={suppliers}
+              navigate={navigate}
+              sortCol={sortCol}
+              sortAsc={sortAsc}
+              onSort={(col) => {
+                if (col === sortCol) setSortAsc(!sortAsc)
+                else { setSortCol(col); setSortAsc(true) }
+              }}
             />
-            <SuppliersList suppliers={suppliers} navigate={navigate} currentUser={currentUser} />
           </>
         )}
       </div>
@@ -205,22 +243,29 @@ function MeetingsList({
   )
 }
 
-function SuppliersList({
+interface EnrichedSupplier {
+  id: string
+  name: string
+  product_type: string
+  stand: string
+  relevance: number
+  is_new: boolean
+  visited_feria: boolean
+  visited_hotel: boolean
+}
+
+function SuppliersTable({
   suppliers,
   navigate,
-  currentUser,
+  sortCol,
+  sortAsc,
+  onSort,
 }: {
-  suppliers: Array<{
-    id: string
-    name: string
-    stand: string
-    assigned_person: string
-    visited: boolean
-    relevance: number
-    product_type: string
-  }> | undefined
+  suppliers: EnrichedSupplier[] | undefined
   navigate: ReturnType<typeof useNavigate>
-  currentUser: string
+  sortCol: string
+  sortAsc: boolean
+  onSort: (col: string) => void
 }) {
   if (!suppliers || suppliers.length === 0) {
     return (
@@ -232,37 +277,83 @@ function SuppliersList({
     )
   }
 
-  return (
-    <div className="flex flex-col gap-2">
-      {suppliers.map(s => {
-        const isMine = s.assigned_person === currentUser || s.assigned_person === 'Todos'
-        const statusColor = s.visited
-          ? 'bg-green-500'
-          : isMine
-            ? 'bg-yellow-400'
-            : 'bg-gray-300'
+  const sorted = [...suppliers].sort((a, b) => {
+    let cmp = 0
+    switch (sortCol) {
+      case 'name': cmp = a.name.localeCompare(b.name); break
+      case 'product_type': cmp = a.product_type.localeCompare(b.product_type); break
+      case 'stand': cmp = a.stand.localeCompare(b.stand); break
+      case 'relevance': cmp = a.relevance - b.relevance; break
+      case 'is_new': cmp = (a.is_new ? 1 : 0) - (b.is_new ? 1 : 0); break
+      case 'visited_feria': cmp = (a.visited_feria ? 1 : 0) - (b.visited_feria ? 1 : 0); break
+      case 'visited_hotel': cmp = (a.visited_hotel ? 1 : 0) - (b.visited_hotel ? 1 : 0); break
+    }
+    return sortAsc ? cmp : -cmp
+  })
 
-        return (
-          <button
-            key={s.id}
-            onClick={() => navigate(`/supplier/${s.id}`)}
-            className="flex items-center gap-3 rounded-lg bg-white p-4 text-left shadow-sm transition-colors hover:bg-gray-50"
-          >
-            <div className={`h-3 w-3 rounded-full ${statusColor}`} />
-            <div className="flex-1">
-              <p className="font-semibold text-gray-800">{s.name}</p>
-              <p className="text-xs text-gray-400">
-                Stand {s.stand} · {s.product_type || '—'} · {s.assigned_person || 'Sin asignar'}
-              </p>
-            </div>
-            <div className="flex gap-0.5">
-              {[1, 2, 3].map(i => (
-                <span key={i} className={`text-xs ${i <= s.relevance ? 'text-yellow-400' : 'text-gray-200'}`}>★</span>
-              ))}
-            </div>
-          </button>
-        )
-      })}
+  const columns: { key: string; label: string; cls?: string }[] = [
+    { key: 'name', label: 'Proveedor', cls: 'text-left' },
+    { key: 'product_type', label: 'Tipo', cls: 'text-left' },
+    { key: 'stand', label: 'Stand', cls: 'text-left' },
+    { key: 'relevance', label: 'Rel', cls: 'text-center w-10' },
+    { key: 'is_new', label: 'Nuevo', cls: 'text-center w-14' },
+    { key: 'visited_feria', label: 'V.Feria', cls: 'text-center w-16' },
+    { key: 'visited_hotel', label: 'V.Hotel', cls: 'text-center w-16' },
+  ]
+
+  const arrow = (col: string) =>
+    sortCol === col ? (sortAsc ? ' ↑' : ' ↓') : ''
+
+  return (
+    <div className="-mx-4 overflow-x-auto">
+      <table className="w-full min-w-[600px] text-xs">
+        <thead>
+          <tr className="border-b border-gray-200 bg-gray-50">
+            {columns.map(c => (
+              <th
+                key={c.key}
+                onClick={() => onSort(c.key)}
+                className={`cursor-pointer whitespace-nowrap px-3 py-2 font-semibold text-gray-500 hover:text-primary ${c.cls || ''}`}
+              >
+                {c.label}{arrow(c.key)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(s => (
+            <tr
+              key={s.id}
+              onClick={() => navigate(`/supplier/${s.id}`)}
+              className="cursor-pointer border-b border-gray-100 bg-white transition-colors hover:bg-blue-50"
+            >
+              <td className="px-3 py-2.5 font-medium text-gray-800">{s.name}</td>
+              <td className="px-3 py-2.5 text-gray-500">{s.product_type || '—'}</td>
+              <td className="px-3 py-2.5 text-gray-500">{s.stand || '—'}</td>
+              <td className="px-3 py-2.5 text-center">
+                <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                  s.relevance === 1 ? 'bg-red-100 text-red-700' :
+                  s.relevance === 2 ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-gray-100 text-gray-500'
+                }`}>
+                  {s.relevance}
+                </span>
+              </td>
+              <td className="px-3 py-2.5 text-center">{s.is_new ? 'S' : 'N'}</td>
+              <td className="px-3 py-2.5 text-center">
+                {s.visited_feria
+                  ? <span className="text-green-600 font-bold">S</span>
+                  : <span className="text-gray-300">N</span>}
+              </td>
+              <td className="px-3 py-2.5 text-center">
+                {s.visited_hotel
+                  ? <span className="text-green-600 font-bold">S</span>
+                  : <span className="text-gray-300">N</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
