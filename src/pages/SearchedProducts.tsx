@@ -6,6 +6,22 @@ import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
 import type { SearchedProduct } from '@/types/searchedProduct'
 
+function calcTargetCost(brand: string, pvpr: number | null, marginTarget: string): number | null {
+  if (!pvpr || !marginTarget) return null
+  const margin = parseFloat(marginTarget.replace('%', '').replace(',', '.').trim())
+  if (isNaN(margin)) return null
+  const m = margin > 1 ? margin / 100 : margin
+  const brandUpper = brand.toUpperCase().trim()
+  if (brandUpper === 'GAME') {
+    return Math.round(((pvpr / 1.21) * (1 - m)) / 1.35 * 100) / 100
+  }
+  if (brandUpper === 'TICNOVA') {
+    return Math.round(((pvpr / 1.21) * (1 - m)) / 1.50 * 100) / 100
+  }
+  // Default: same as GAME formula
+  return Math.round(((pvpr / 1.21) * (1 - m)) / 1.35 * 100) / 100
+}
+
 export default function SearchedProducts() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
@@ -159,47 +175,52 @@ export default function SearchedProducts() {
           </div>
         ) : (
           <div className="-mx-4 overflow-x-auto">
-            <table className="w-full min-w-[700px] text-xs">
+            <table className="w-full min-w-[900px] text-xs">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500">Marca</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500">Tipo</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500">Ref/Segmento</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500">Specs</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-500">Target $</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-500">PVPR</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500">Modelo</th>
-                  <th className="px-3 py-2 text-center font-semibold text-gray-500 w-16"></th>
+                  <th className="px-2 py-2 text-left font-semibold text-gray-500">Marca</th>
+                  <th className="px-2 py-2 text-left font-semibold text-gray-500">Tipo</th>
+                  <th className="px-2 py-2 text-left font-semibold text-gray-500">Ref/Seg.</th>
+                  <th className="px-2 py-2 text-left font-semibold text-gray-500">Specs</th>
+                  <th className="px-2 py-2 text-right font-semibold text-gray-500">Margen %</th>
+                  <th className="px-2 py-2 text-right font-semibold text-gray-500">PVPR €</th>
+                  <th className="px-2 py-2 text-right font-semibold text-gray-500">Target $</th>
+                  <th className="px-2 py-2 text-left font-semibold text-gray-500">Modelo</th>
+                  <th className="px-2 py-2 text-center font-semibold text-gray-500 w-16"></th>
                 </tr>
               </thead>
               <tbody>
-                {products.map(p => (
-                  <tr key={p.id} className="border-b border-gray-100 bg-white hover:bg-blue-50">
-                    <td className="px-3 py-2.5 font-medium text-gray-800">{p.brand || '—'}</td>
-                    <td className="px-3 py-2.5 text-gray-600">{p.product_type}</td>
-                    <td className="px-3 py-2.5 text-gray-500">{p.ref_segment || '—'}</td>
-                    <td className="px-3 py-2.5 text-gray-500 max-w-[150px] truncate">{p.main_specs || '—'}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-600">{p.target_cost ? `$${p.target_cost}` : '—'}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-600">{p.pvpr ? `${p.pvpr}€` : '—'}</td>
-                    <td className="px-3 py-2.5 text-gray-500">{p.model_interno || '—'}</td>
-                    <td className="px-3 py-2.5 text-center">
-                      <div className="flex gap-1 justify-center">
-                        <button
-                          onClick={() => { setEditingProduct(p); setShowForm(true) }}
-                          className="rounded px-2 py-1 text-[10px] text-primary hover:bg-primary/10"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleDelete(p.id)}
-                          className="rounded px-2 py-1 text-[10px] text-red-500 hover:bg-red-50"
-                        >
-                          X
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {products.map(p => {
+                  const computed = calcTargetCost(p.brand, p.pvpr, p.margin_target)
+                  return (
+                    <tr key={p.id} className="border-b border-gray-100 bg-white hover:bg-blue-50">
+                      <td className="px-2 py-2.5 font-medium text-gray-800">{p.brand || '—'}</td>
+                      <td className="px-2 py-2.5 text-gray-600">{p.product_type}</td>
+                      <td className="px-2 py-2.5 text-gray-500">{p.ref_segment || '—'}</td>
+                      <td className="px-2 py-2.5 text-gray-500 max-w-[120px] truncate">{p.main_specs || '—'}</td>
+                      <td className="px-2 py-2.5 text-right text-gray-600">{p.margin_target || '—'}</td>
+                      <td className="px-2 py-2.5 text-right text-gray-600">{p.pvpr ? `${p.pvpr.toFixed(2)}€` : '—'}</td>
+                      <td className="px-2 py-2.5 text-right font-semibold text-green-700">{computed ? `$${computed.toFixed(2)}` : '—'}</td>
+                      <td className="px-2 py-2.5 text-gray-500">{p.model_interno || '—'}</td>
+                      <td className="px-2 py-2.5 text-center">
+                        <div className="flex gap-1 justify-center">
+                          <button
+                            onClick={() => { setEditingProduct(p); setShowForm(true) }}
+                            className="rounded px-2 py-1 text-[10px] text-primary hover:bg-primary/10"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => handleDelete(p.id)}
+                            className="rounded px-2 py-1 text-[10px] text-red-500 hover:bg-red-50"
+                          >
+                            X
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -228,7 +249,6 @@ function SearchedProductForm({
   const [productType, setProductType] = useState(product?.product_type || '')
   const [refSegment, setRefSegment] = useState(product?.ref_segment || '')
   const [mainSpecs, setMainSpecs] = useState(product?.main_specs || '')
-  const [targetCost, setTargetCost] = useState(product?.target_cost?.toString() || '')
   const [examples, setExamples] = useState(product?.examples || '')
   const [marginTarget, setMarginTarget] = useState(product?.margin_target || '')
   const [pvpr, setPvpr] = useState(product?.pvpr?.toString() || '')
@@ -242,7 +262,7 @@ function SearchedProductForm({
       product_type: productType.trim(),
       ref_segment: refSegment.trim(),
       main_specs: mainSpecs.trim(),
-      target_cost: targetCost ? parseFloat(targetCost) : null,
+      target_cost: null,
       examples: examples.trim(),
       margin_target: marginTarget.trim(),
       pvpr: pvpr ? parseFloat(pvpr) : null,
@@ -301,16 +321,21 @@ function SearchedProductForm({
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Target Cost ($)</label>
-              <input type="number" value={targetCost} onChange={e => setTargetCost(e.target.value)} className={fieldCls} placeholder="0.00" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Margin Target</label>
-              <input type="text" value={marginTarget} onChange={e => setMarginTarget(e.target.value)} className={fieldCls} placeholder="30%, x2..." />
+              <label className="mb-1 block text-xs font-medium text-gray-500">Margin Target (%)</label>
+              <input type="number" step="0.01" value={marginTarget} onChange={e => setMarginTarget(e.target.value)} className={fieldCls} placeholder="30" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500">PVPR (€)</label>
-              <input type="number" value={pvpr} onChange={e => setPvpr(e.target.value)} className={fieldCls} placeholder="0.00" />
+              <input type="number" step="0.01" value={pvpr} onChange={e => setPvpr(e.target.value)} className={fieldCls} placeholder="29.90" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Target Cost ($) <span className="font-normal text-gray-400">calc.</span></label>
+              <div className="flex h-[42px] items-center rounded-lg border border-gray-100 bg-gray-50 px-3 text-sm font-semibold text-green-700">
+                {(() => {
+                  const tc = calcTargetCost(brand, pvpr ? parseFloat(pvpr) : null, marginTarget)
+                  return tc ? `$${tc.toFixed(2)}` : '—'
+                })()}
+              </div>
             </div>
           </div>
           <div>
