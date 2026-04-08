@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
 import { uploadPhoto, compressImage } from '@/lib/storage'
-import type { UserName, Product, SampleStatus } from '@/types'
+import type { UserName, Product, SampleStatus, Supplier } from '@/types'
 
 interface Props {
   currentUser: UserName
@@ -26,6 +26,10 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
 
   const [urgentNotes, setUrgentNotes] = useState('')
   const [otherNotes, setOtherNotes] = useState('')
+  const [contactName, setContactName] = useState('')
+  const [contactEmail, setContactEmail] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
+  const [contactsInitialized, setContactsInitialized] = useState(false)
   const [showProductForm, setShowProductForm] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [saved, setSaved] = useState(false)
@@ -37,6 +41,15 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
     }
   }, [meeting])
 
+  useEffect(() => {
+    if (supplier && !contactsInitialized) {
+      setContactName(supplier.assigned_person || '')
+      setContactEmail(supplier.emails.join(', ') || '')
+      setContactPhone(supplier.phone || '')
+      setContactsInitialized(true)
+    }
+  }, [supplier, contactsInitialized])
+
   const autoSave = useCallback(async () => {
     if (!id) return
     const now = new Date().toISOString()
@@ -45,9 +58,22 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
       other_notes: otherNotes,
       updated_at: now,
     })
+    // Sync empty supplier fields with meeting contact data
+    if (supplier) {
+      const updates: Partial<Supplier> = {}
+      if (!supplier.assigned_person && contactName.trim()) updates.assigned_person = contactName.trim()
+      if ((!supplier.emails || supplier.emails.length === 0) && contactEmail.trim()) {
+        updates.emails = contactEmail.split(',').map(e => e.trim()).filter(Boolean)
+      }
+      if (!supplier.phone && contactPhone.trim()) updates.phone = contactPhone.trim()
+      if (Object.keys(updates).length > 0) {
+        updates.updated_at = now
+        await db.suppliers.update(supplier.id, updates)
+      }
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
-  }, [id, urgentNotes, otherNotes])
+  }, [id, urgentNotes, otherNotes, supplier, contactName, contactEmail, contactPhone])
 
   useEffect(() => {
     const timer = setTimeout(autoSave, 2000)
@@ -97,6 +123,54 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
           </p>
         </div>
 
+        {/* Contact Info + Business Card */}
+        <div className="rounded-xl bg-white p-4 shadow-sm">
+          <div className="flex gap-4">
+            {/* Business Card - left half */}
+            <div className="w-1/3 shrink-0">
+              <label className="mb-1 block text-xs font-medium text-gray-500">Tarjeta</label>
+              {meeting.business_card_photo_url ? (
+                <div className="relative">
+                  <img
+                    src={meeting.business_card_photo_url}
+                    alt="Tarjeta"
+                    className="w-full rounded-lg object-cover"
+                    style={{ maxHeight: 120 }}
+                  />
+                  <button
+                    onClick={async () => {
+                      await db.meetings.update(id!, { business_card_photo_url: '', updated_at: new Date().toISOString() })
+                    }}
+                    className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white"
+                  >
+                    x
+                  </button>
+                </div>
+              ) : (
+                <BusinessCardUpload meetingId={id!} />
+              )}
+            </div>
+            {/* Contact fields - right */}
+            <div className="flex flex-1 flex-col gap-2">
+              <div>
+                <label className="mb-0.5 block text-xs font-medium text-gray-500">Contacto</label>
+                <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" placeholder="Mr. Wang" />
+              </div>
+              <div>
+                <label className="mb-0.5 block text-xs font-medium text-gray-500">Email</label>
+                <input type="text" value={contactEmail} onChange={e => setContactEmail(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" placeholder="sales@company.com" />
+              </div>
+              <div>
+                <label className="mb-0.5 block text-xs font-medium text-gray-500">Teléfono</label>
+                <input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" placeholder="+86 ..." />
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Urgent Notes */}
         <div className="rounded-xl border border-urgent-border bg-urgent p-4">
           <label className="mb-2 block text-sm font-semibold text-amber-800">
@@ -123,33 +197,6 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none"
             placeholder="Añade aquí otro texto como peticiones de producto o otras consultas para que se añadan al email del proveedor."
           />
-        </div>
-
-        {/* Business Card Photo */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
-          <label className="mb-2 block text-sm font-semibold text-gray-700">
-            Foto de tarjeta de visita
-          </label>
-          {meeting.business_card_photo_url ? (
-            <div className="relative">
-              <img
-                src={meeting.business_card_photo_url}
-                alt="Tarjeta de visita"
-                className="w-full rounded-lg object-cover"
-                style={{ maxHeight: 200 }}
-              />
-              <button
-                onClick={async () => {
-                  await db.meetings.update(id!, { business_card_photo_url: '', updated_at: new Date().toISOString() })
-                }}
-                className="absolute right-2 top-2 rounded-full bg-black/50 p-1 text-white"
-              >
-                ✕
-              </button>
-            </div>
-          ) : (
-            <BusinessCardUpload meetingId={id!} />
-          )}
         </div>
 
         {/* Products */}
