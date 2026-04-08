@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
+import { useSync } from '@/hooks/useSync'
 import type { UserName } from '@/types'
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 type Tab = 'meetings' | 'suppliers'
 
 export default function Home({ currentUser, onLogout }: Props) {
+  const syncStatus = useSync()
   const [tab, setTab] = useState<Tab>('meetings')
   const [search, setSearch] = useState('')
   const navigate = useNavigate()
@@ -54,7 +56,7 @@ export default function Home({ currentUser, onLogout }: Props) {
             <p className="text-xs text-gray-400">{currentUser}</p>
           </div>
           <div className="flex items-center gap-2">
-            <SyncIndicator />
+            <SyncIndicator status={syncStatus} />
             <button
               onClick={() => navigate('/settings')}
               className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
@@ -133,11 +135,18 @@ export default function Home({ currentUser, onLogout }: Props) {
   )
 }
 
-function SyncIndicator() {
+function SyncIndicator({ status }: { status: string }) {
+  const config = {
+    synced: { bg: 'bg-green-50', text: 'text-green-600', dot: 'bg-green-500', label: 'Sincronizado' },
+    pending: { bg: 'bg-yellow-50', text: 'text-yellow-600', dot: 'bg-yellow-400', label: 'Sincronizando...' },
+    error: { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500', label: 'Error sync' },
+    offline: { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400', label: 'Offline' },
+  }[status] || { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400', label: 'Offline' }
+
   return (
-    <div className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-xs text-green-600">
-      <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
-      Sync
+    <div className={`flex items-center gap-1 rounded-full ${config.bg} px-2 py-1 text-xs ${config.text}`}>
+      <div className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
+      {config.label}
     </div>
   )
 }
