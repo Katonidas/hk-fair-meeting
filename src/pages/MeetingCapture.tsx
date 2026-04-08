@@ -185,20 +185,6 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
           />
         </div>
 
-        {/* Other Notes */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
-          <label className="mb-2 block text-sm font-semibold text-gray-700">
-            Texto adicional / Observaciones
-          </label>
-          <textarea
-            value={otherNotes}
-            onChange={e => setOtherNotes(e.target.value)}
-            rows={3}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            placeholder="Añade aquí otro texto como peticiones de producto o otras consultas para que se añadan al email del proveedor."
-          />
-        </div>
-
         {/* Products */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
@@ -231,6 +217,20 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
               Sin productos aún
             </p>
           )}
+        </div>
+
+        {/* Other Notes - at the bottom */}
+        <div className="rounded-xl bg-white p-4 shadow-sm">
+          <label className="mb-2 block text-sm font-semibold text-gray-700">
+            Texto adicional / Observaciones
+          </label>
+          <textarea
+            value={otherNotes}
+            onChange={e => setOtherNotes(e.target.value)}
+            rows={3}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            placeholder="Añade aquí otro texto como peticiones de producto o otras consultas para que se añadan al email del proveedor."
+          />
         </div>
       </div>
 

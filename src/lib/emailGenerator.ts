@@ -12,6 +12,8 @@ export function generateEmailBody(
 ): string {
   const lines: string[] = []
 
+  lines.push('Hello,')
+  lines.push('')
   lines.push(`Dear ${supplier.name} team,`)
   lines.push('')
   lines.push('It was a pleasure visiting your stand at the HK Sources Fair.')
@@ -26,8 +28,10 @@ export function generateEmailBody(
 
   lines.push('---')
   lines.push('')
+  lines.push('*** TERMS & CONDITIONS ***')
+  lines.push('')
   lines.push('IMPORTANT — Please note our standard terms and conditions.')
-  lines.push('All negotiations and agreed conditions are based on the following terms:')
+  lines.push('All negotiations, agreed conditions and PRICES are based on and must include the following terms:')
   lines.push('')
   lines.push(getTerms())
   lines.push('')
@@ -85,7 +89,7 @@ export function generateEmailBody(
 
   lines.push('')
   lines.push('Best regards,')
-  lines.push('APPROX Team')
+  lines.push(`${meeting.user_name} - APPROX`)
 
   return lines.join('\n')
 }

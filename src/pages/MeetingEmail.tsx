@@ -133,18 +133,26 @@ export default function MeetingEmail({ currentUser }: Props) {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 pb-6">
+        <div className="flex flex-col gap-3 pb-6">
+          <div className="flex gap-3">
+            <button
+              onClick={handleSaveDraft}
+              className="flex-1 rounded-xl border border-gray-200 bg-white py-4 text-base font-medium text-gray-600 transition-colors hover:bg-gray-50"
+            >
+              Guardar borrador
+            </button>
+            <button
+              onClick={handleOpenEmail}
+              className="flex-1 rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
+            >
+              ABRIR EN EMAIL
+            </button>
+          </div>
           <button
-            onClick={handleSaveDraft}
-            className="flex-1 rounded-xl border border-gray-200 bg-white py-4 text-base font-medium text-gray-600 transition-colors hover:bg-gray-50"
+            onClick={() => navigate(`/meeting/${id}`)}
+            className="w-full rounded-xl border border-primary/30 bg-primary/5 py-3 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
           >
-            Guardar borrador
-          </button>
-          <button
-            onClick={handleOpenEmail}
-            className="flex-1 rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
-          >
-            ABRIR EN EMAIL
+            Volver a la reunión
           </button>
         </div>
       </div>
