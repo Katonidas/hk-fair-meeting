@@ -4,6 +4,8 @@ export type SampleStatus = 'collected' | 'pending' | 'no'
 
 export type MeetingLocation = 'feria' | 'hotel'
 
+export type MeetingStatus = 'draft' | 'saved'
+
 export type Relevance = 1 | 2 | 3
 
 export interface Supplier {
@@ -35,6 +37,7 @@ export interface Meeting {
   supplier_id: string
   user_name: UserName
   location: MeetingLocation
+  status: MeetingStatus
   visited_at: string
   urgent_notes: string
   other_notes: string

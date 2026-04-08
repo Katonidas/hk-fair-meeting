@@ -92,6 +92,7 @@ export default function SupplierDetail({ currentUser }: Props) {
       supplier_id: id,
       user_name: currentUser,
       location: 'feria',
+      status: 'draft',
       visited_at: now,
       urgent_notes: '',
       other_notes: '',

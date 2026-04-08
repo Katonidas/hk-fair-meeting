@@ -21,6 +21,9 @@ export class FairDB extends Dexie {
     this.version(3).stores({
       meetings: 'id, supplier_id, user_name, location, visited_at, email_generated, synced_at',
     })
+    this.version(4).stores({
+      meetings: 'id, supplier_id, user_name, location, status, visited_at, email_generated, synced_at',
+    })
   }
 }
 

@@ -40,6 +40,7 @@ export default function NewMeeting({ currentUser }: Props) {
       supplier_id: supplierId,
       user_name: currentUser,
       location: meetingLocation,
+      status: 'draft',
       visited_at: visitedAt,
       urgent_notes: '',
       other_notes: '',

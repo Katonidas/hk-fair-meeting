@@ -17,19 +17,18 @@ export default function Home({ currentUser, onLogout }: Props) {
   const syncStatus = useSync()
   const [tab, setTab] = useState<Tab>('meetings')
   const [search, setSearch] = useState('')
+  const [meetingFilter, setMeetingFilter] = useState<'all' | 'draft' | 'saved'>('all')
   const navigate = useNavigate()
 
-  const todayMeetings = useLiveQuery(async () => {
-    const today = new Date().toISOString().slice(0, 10)
+  const allMeetings = useLiveQuery(async () => {
     const meetings = await db.meetings
       .where('user_name')
       .equals(currentUser)
       .toArray()
-    const todayOnly = meetings.filter(m => m.visited_at.slice(0, 10) === today)
-    todayOnly.sort((a, b) => b.visited_at.localeCompare(a.visited_at))
+    meetings.sort((a, b) => b.visited_at.localeCompare(a.visited_at))
 
     const enriched = await Promise.all(
-      todayOnly.map(async m => {
+      meetings.map(async m => {
         const supplier = await db.suppliers.get(m.supplier_id)
         const productCount = await db.products.where('meeting_id').equals(m.id).count()
         return { ...m, supplier, productCount }
@@ -139,7 +138,29 @@ export default function Home({ currentUser, onLogout }: Props) {
       {/* Content */}
       <div className="flex-1 px-4 py-3">
         {tab === 'meetings' ? (
-          <MeetingsList meetings={todayMeetings} navigate={navigate} />
+          <>
+            <div className="mb-3 flex gap-2">
+              {(['all', 'saved', 'draft'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setMeetingFilter(f)}
+                  className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
+                    meetingFilter === f ? 'bg-primary text-white' : 'bg-white text-gray-500 border border-gray-200'
+                  }`}
+                >
+                  {f === 'all' ? 'Todas' : f === 'saved' ? 'Guardadas' : 'Borradores'}
+                </button>
+              ))}
+            </div>
+            <MeetingsList
+              meetings={allMeetings?.filter(m =>
+                meetingFilter === 'all' ? true :
+                meetingFilter === 'saved' ? m.status === 'saved' :
+                m.status === 'draft' || !m.status
+              )}
+              navigate={navigate}
+            />
+          </>
         ) : (
           <>
             <button
@@ -334,15 +355,17 @@ function MeetingsList({
     visited_at: string
     productCount: number
     email_generated: boolean
+    status?: string
+    location?: string
     supplier?: { name: string; stand: string } | undefined
   }> | undefined
-  navigate: ReturnType<typeof useNavigate>
+  navigate: (path: string) => void
 }) {
   if (!meetings || meetings.length === 0) {
     return (
       <div className="py-12 text-center text-gray-400">
         <p className="text-4xl">📋</p>
-        <p className="mt-2">No hay reuniones hoy</p>
+        <p className="mt-2">No hay reuniones</p>
         <p className="text-xs">Pulsa "NUEVA REUNIÓN" para empezar</p>
       </div>
     )
@@ -350,30 +373,46 @@ function MeetingsList({
 
   return (
     <div className="flex flex-col gap-2">
-      {meetings.map(m => (
-        <button
-          key={m.id}
-          onClick={() => navigate(`/meeting/${m.id}`)}
-          className="flex items-center justify-between rounded-lg bg-white p-4 text-left shadow-sm transition-colors hover:bg-gray-50"
-        >
-          <div className="flex-1">
-            <p className="font-semibold text-gray-800">{m.supplier?.name || 'Proveedor'}</p>
-            <p className="text-xs text-gray-400">
-              Stand {m.supplier?.stand} · {new Date(m.visited_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
-              {m.productCount} prod
-            </span>
-            {m.email_generated ? (
-              <span className="text-lg text-success">✓</span>
-            ) : (
-              <span className="text-lg text-warning">⏳</span>
-            )}
-          </div>
-        </button>
-      ))}
+      {meetings.map(m => {
+        const isDraft = m.status === 'draft' || !m.status
+        const dateStr = new Date(m.visited_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })
+        const timeStr = new Date(m.visited_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+        const locationLabel = m.location === 'hotel' ? 'Hotel' : 'Feria'
+
+        return (
+          <button
+            key={m.id}
+            onClick={() => navigate(`/meeting/${m.id}`)}
+            className={`flex items-center justify-between rounded-lg p-4 text-left shadow-sm transition-colors hover:bg-gray-50 ${
+              isDraft ? 'border border-dashed border-gray-300 bg-gray-50' : 'bg-white'
+            }`}
+          >
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <p className="font-semibold text-gray-800">{m.supplier?.name || 'Proveedor'}</p>
+                {isDraft && (
+                  <span className="rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-700">BORRADOR</span>
+                )}
+              </div>
+              <p className="text-xs text-gray-400">
+                {dateStr} {timeStr} · {locationLabel} · Stand {m.supplier?.stand || '—'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                {m.productCount} prod
+              </span>
+              <div className="flex flex-col items-center gap-0.5">
+                {m.email_generated ? (
+                  <span className="text-xs text-green-600 font-bold" title="Email enviado">Email ✓</span>
+                ) : (
+                  <span className="text-xs text-gray-300" title="Email no enviado">Email —</span>
+                )}
+              </div>
+            </div>
+          </button>
+        )
+      })}
     </div>
   )
 }

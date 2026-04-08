@@ -92,28 +92,28 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
         {/* Urgent Notes */}
         <div className="rounded-xl border border-urgent-border bg-urgent p-4">
           <label className="mb-2 block text-sm font-semibold text-amber-800">
-            ⚡ Notas urgentes / puntos críticos
+            Notas urgentes / puntos críticos
           </label>
           <textarea
             value={urgentNotes}
             onChange={e => setUrgentNotes(e.target.value)}
             rows={3}
             className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
-            placeholder="Precio especial si cerramos antes del viernes, muestra limitada..."
+            placeholder="Añade aquí información importante que aparecerá en el email resumen en la parte superior destacada. Incidencias o cosas que se quieren remarcar de forma destacada."
           />
         </div>
 
         {/* Other Notes */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
           <label className="mb-2 block text-sm font-semibold text-gray-700">
-            Observaciones generales
+            Texto adicional / Observaciones
           </label>
           <textarea
             value={otherNotes}
             onChange={e => setOtherNotes(e.target.value)}
             rows={3}
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            placeholder="Buena calidad general, fábrica propia, catálogo amplio..."
+            placeholder="Añade aquí otro texto como peticiones de producto o otras consultas para que se añadan al email del proveedor."
           />
         </div>
 
@@ -188,17 +188,31 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
         />
       )}
 
-      {/* Footer - Generate Email */}
+      {/* Footer - Save + Preview Email */}
       <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white px-4 py-3 shadow-lg">
-        <button
-          onClick={async () => {
-            await autoSave()
-            navigate(`/meeting/${id}/email`)
-          }}
-          className="w-full rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
-        >
-          GENERAR EMAIL RESUMEN
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={async () => {
+              await autoSave()
+              if (id) {
+                await db.meetings.update(id, { status: 'saved', updated_at: new Date().toISOString() })
+              }
+              navigate('/')
+            }}
+            className="flex-1 rounded-xl border border-gray-200 bg-white py-4 text-base font-medium text-gray-600 transition-colors hover:bg-gray-50"
+          >
+            Guardar reunión
+          </button>
+          <button
+            onClick={async () => {
+              await autoSave()
+              navigate(`/meeting/${id}/email`)
+            }}
+            className="flex-1 rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
+          >
+            Previsualizar EMAIL
+          </button>
+        </div>
       </div>
     </div>
   )
