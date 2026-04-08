@@ -11,7 +11,7 @@ interface Props {
   onLogout: () => void
 }
 
-type Tab = 'meetings' | 'suppliers'
+type Tab = 'meetings' | 'suppliers' | 'searched'
 
 export default function Home({ currentUser, onLogout }: Props) {
   const syncStatus = useSync()
@@ -132,6 +132,12 @@ export default function Home({ currentUser, onLogout }: Props) {
           }`}
         >
           Proveedores
+        </button>
+        <button
+          onClick={() => navigate('/searched-products')}
+          className="flex-1 border-b-2 border-transparent pb-2 text-sm font-medium text-gray-400 transition-colors hover:text-primary"
+        >
+          Prod. Buscados
         </button>
       </div>
 

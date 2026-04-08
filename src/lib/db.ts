@@ -1,11 +1,13 @@
 import Dexie, { type Table } from 'dexie'
 import type { Supplier, Meeting, Product, ProductPhoto } from '@/types'
+import type { SearchedProduct } from '@/types/searchedProduct'
 
 export class FairDB extends Dexie {
   suppliers!: Table<Supplier>
   meetings!: Table<Meeting>
   products!: Table<Product>
   product_photos!: Table<ProductPhoto>
+  searched_products!: Table<SearchedProduct>
 
   constructor() {
     super('hk-fair-meeting')
@@ -23,6 +25,9 @@ export class FairDB extends Dexie {
     })
     this.version(4).stores({
       meetings: 'id, supplier_id, user_name, location, status, visited_at, email_generated, synced_at',
+    })
+    this.version(5).stores({
+      searched_products: 'id, brand, product_type, ref_segment, updated_at, synced_at',
     })
   }
 }

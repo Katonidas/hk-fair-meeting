@@ -7,6 +7,7 @@ import MeetingCapture from '@/pages/MeetingCapture'
 import MeetingEmail from '@/pages/MeetingEmail'
 import SupplierDetail from '@/pages/SupplierDetail'
 import Settings from '@/pages/Settings'
+import SearchedProducts from '@/pages/SearchedProducts'
 
 export default function App() {
   const { currentUser, setCurrentUser, clearUser } = useCurrentUser()
@@ -22,6 +23,7 @@ export default function App() {
       <Route path="/meeting/:id" element={<MeetingCapture currentUser={currentUser} />} />
       <Route path="/meeting/:id/email" element={<MeetingEmail currentUser={currentUser} />} />
       <Route path="/supplier/:id" element={<SupplierDetail currentUser={currentUser} />} />
+      <Route path="/searched-products" element={<SearchedProducts />} />
       <Route path="/settings" element={<Settings currentUser={currentUser} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -27,6 +27,17 @@ export default function SupplierDetail({ currentUser }: Props) {
     return enriched
   }, [id])
 
+  const matchingSearchedProducts = useLiveQuery(async () => {
+    if (!supplier?.product_type) return []
+    const supplierTypes = supplier.product_type.toLowerCase().split(/[,;/]/).map(t => t.trim()).filter(Boolean)
+    if (supplierTypes.length === 0) return []
+    const all = await db.searched_products.toArray()
+    return all.filter(sp => {
+      const spType = sp.product_type.toLowerCase()
+      return supplierTypes.some(st => spType.includes(st) || st.includes(spType))
+    })
+  }, [supplier?.product_type])
+
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
   const [stand, setStand] = useState('')
@@ -211,6 +222,30 @@ export default function SupplierDetail({ currentUser }: Props) {
             </div>
           )}
         </div>
+
+        {/* Matching Searched Products */}
+        {matchingSearchedProducts && matchingSearchedProducts.length > 0 && (
+          <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+            <h2 className="mb-2 text-sm font-semibold text-purple-700">
+              Productos buscados que coinciden ({matchingSearchedProducts.length})
+            </h2>
+            <div className="flex flex-col gap-2">
+              {matchingSearchedProducts.map(sp => (
+                <div key={sp.id} className="rounded-lg bg-white p-3 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-gray-800">{sp.brand} — {sp.product_type}</span>
+                    {sp.target_cost && <span className="text-purple-600 font-bold">${sp.target_cost}</span>}
+                  </div>
+                  <p className="mt-1 text-gray-500">
+                    {sp.ref_segment && <>{sp.ref_segment} · </>}
+                    {sp.main_specs || 'Sin specs'}
+                    {sp.model_interno && <> · Modelo: {sp.model_interno}</>}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Meetings */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
