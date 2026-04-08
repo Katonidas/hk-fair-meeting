@@ -131,13 +131,15 @@ function NewSupplierForm({
 }) {
   const [name, setName] = useState('')
   const [stand, setStand] = useState('')
+  const [productType, setProductType] = useState('')
+  const [contactPerson, setContactPerson] = useState('')
   const [emails, setEmails] = useState('')
   const [phone, setPhone] = useState('')
   const [saving, setSaving] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim() || !stand.trim()) return
+    if (!name.trim()) return
     setSaving(true)
 
     const id = uuid()
@@ -146,8 +148,8 @@ function NewSupplierForm({
       id,
       name: name.trim(),
       stand: stand.trim(),
-      assigned_person: currentUser,
-      product_type: '',
+      assigned_person: contactPerson.trim() || currentUser,
+      product_type: productType.trim(),
       emails: emails.split(',').map(e => e.trim()).filter(Boolean),
       phone: phone.trim(),
       relevance: 2,
@@ -185,14 +187,33 @@ function NewSupplierForm({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Número de stand *</label>
+          <label className="mb-1 block text-xs font-medium text-gray-500">Número de stand</label>
           <input
             type="text"
             value={stand}
             onChange={e => setStand(e.target.value)}
-            required
             className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:border-primary focus:outline-none"
             placeholder="Ej: 3F-A12"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-500">Tipo de productos</label>
+          <input
+            type="text"
+            value={productType}
+            onChange={e => setProductType(e.target.value)}
+            className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:border-primary focus:outline-none"
+            placeholder="Ej: LED lighting, cables, adapters..."
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-500">Persona de contacto</label>
+          <input
+            type="text"
+            value={contactPerson}
+            onChange={e => setContactPerson(e.target.value)}
+            className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:border-primary focus:outline-none"
+            placeholder="Ej: Mr. Wang"
           />
         </div>
         <div>
@@ -217,7 +238,7 @@ function NewSupplierForm({
         </div>
         <button
           type="submit"
-          disabled={saving || !name.trim() || !stand.trim()}
+          disabled={saving || !name.trim()}
           className="w-full rounded-lg bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark disabled:opacity-50"
         >
           {saving ? 'Creando...' : 'Crear y continuar'}
