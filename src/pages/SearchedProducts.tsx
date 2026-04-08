@@ -226,7 +226,7 @@ export default function SearchedProducts() {
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="px-2 py-2 text-left font-semibold text-gray-500">Marca</th>
                   <th className="px-2 py-2 text-left font-semibold text-gray-500">Tipo Producto</th>
-                  <th className="px-2 py-2 text-left font-semibold text-gray-500 w-16">Ref.</th>
+                  <th className="px-2 py-2 text-left font-semibold text-gray-500 w-36">Ref.</th>
                   <th className="px-2 py-2 text-left font-semibold text-gray-500">Specs</th>
                   <th className="px-2 py-2 text-right font-bold text-gray-700">Target Compra USD</th>
                   <th className="px-2 py-2 text-right font-semibold text-gray-500 w-20">Margen %</th>
@@ -246,7 +246,7 @@ export default function SearchedProducts() {
                     >
                       <td className="px-2 py-2.5 font-medium text-gray-800">{p.brand || '—'}</td>
                       <td className="px-2 py-2.5 text-gray-600">{p.product_type}</td>
-                      <td className="px-2 py-2.5 text-gray-500 max-w-[60px] truncate">{p.ref_segment || '—'}</td>
+                      <td className="px-2 py-2.5 text-gray-500 max-w-[140px] truncate">{p.ref_segment || '—'}</td>
                       <td className="group relative px-2 py-2.5 text-gray-500 max-w-[200px] truncate">
                         {p.main_specs || '—'}
                         {p.main_specs && (
