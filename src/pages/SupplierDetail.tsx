@@ -8,6 +8,7 @@ import { USERS, getCCEmails } from '@/lib/constants'
 import { getMatchingSearchedProducts } from '@/lib/matching'
 import { buildMailtoUrl } from '@/lib/emailGenerator'
 import { getTerms } from '@/lib/settings'
+import { fmtPrice } from '@/lib/price'
 import type { UserName, Relevance, ProductStatus, SampleStatus } from '@/types'
 import type { SearchedProduct } from '@/types/searchedProduct'
 import { StatusBadge, ProductDetailModal } from '@/pages/CapturedProducts'
@@ -269,30 +270,6 @@ export default function SupplierDetail({ currentUser }: Props) {
           )}
         </div>
 
-        {/* Matching Searched Products */}
-        {matchingSearchedProducts && matchingSearchedProducts.length > 0 && (
-          <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
-            <h2 className="mb-2 text-sm font-semibold text-purple-700">
-              Productos deseados que coinciden ({matchingSearchedProducts.length})
-            </h2>
-            <div className="flex flex-col gap-2">
-              {matchingSearchedProducts.map(sp => (
-                <div key={sp.id} className="rounded-lg bg-white p-3 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-gray-800">{sp.brand} — {sp.product_type}</span>
-                    {sp.target_cost && <span className="text-purple-600 font-bold">${sp.target_cost}</span>}
-                  </div>
-                  <p className="mt-1 text-gray-500">
-                    {sp.ref_segment && <>{sp.ref_segment} · </>}
-                    {sp.main_specs || 'Sin specs'}
-                    {sp.model_interno && <> · Modelo: {sp.model_interno}</>}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Meetings */}
         <SupplierMeetingsTable
           meetings={meetings}
@@ -330,63 +307,10 @@ export default function SupplierDetail({ currentUser }: Props) {
 
         {/* Productos Potenciales */}
         {matchingSearchedProducts && matchingSearchedProducts.length > 0 && (
-          <div className="rounded-xl bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-purple-700">
-                Productos Potenciales a encontrar en proveedor ({matchingSearchedProducts.length})
-              </h2>
-              <button
-                onClick={() => {
-                  if (!supplier) return
-                  const terms = getTerms()
-                  const lines: string[] = []
-                  lines.push('Hello,')
-                  lines.push('')
-                  lines.push('We are looking for the following products. To make our meeting more efficient, please have ready the products that you consider may fit both in terms of specifications and price, also taking into account the examples we send regarding shape or design.')
-                  lines.push('')
-                  lines.push('Of course, if you have any alternative, we will be happy to see it. If you want to send us the information by email in advance, that would be great too. Please send us the best possible offer along with images and specifications of the product.')
-                  lines.push('')
-                  lines.push('Please remember that the prices provided must be based on and include our agreed terms and conditions:')
-                  lines.push('')
-                  lines.push(terms)
-                  lines.push('')
-                  lines.push('PRODUCTS WE ARE LOOKING FOR:')
-                  lines.push(String.fromCharCode(9552).repeat(27))
-                  lines.push('')
-                  matchingSearchedProducts.forEach((sp, i) => {
-                    lines.push(`${String.fromCharCode(9472)}${String.fromCharCode(9472)} Product ${i + 1} ${String.fromCharCode(9472)}${String.fromCharCode(9472)}`)
-                    lines.push(`  TYPE: ${sp.product_type || '—'}`)
-                    lines.push(`  SPECS: ${sp.main_specs || '—'}`)
-                    lines.push(`  TARGET PRICE: ${sp.target_cost != null ? `$${sp.target_cost}` : '—'}`)
-                    lines.push(`  EXAMPLES: ${sp.examples || '—'}`)
-                    lines.push('')
-                  })
-                  lines.push('Best regards,')
-                  lines.push('APPROX Team')
-                  const body = lines.join('\n')
-                  const currentUser = (localStorage.getItem('hk-fair-user') || 'Jesús') as UserName
-                  const cc = getCCEmails(currentUser)
-                  const url = buildMailtoUrl(supplier.emails, cc, 'Productos buscados APPROX', body)
-                  window.open(url, '_blank')
-                }}
-                className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-medium text-white hover:bg-purple-700"
-              >
-                Enviar email
-              </button>
-            </div>
-            <div className="flex flex-col gap-2">
-              {matchingSearchedProducts.map(sp => (
-                <div key={sp.id} className="rounded-lg border border-purple-200 bg-purple-50 p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-purple-800">{sp.brand} — {sp.product_type}</span>
-                    {sp.target_cost != null && <span className="text-xs font-bold text-purple-600">${sp.target_cost}</span>}
-                  </div>
-                  <p className="mt-1 text-xs text-gray-600">{sp.main_specs || 'Sin specs'}</p>
-                  {sp.examples && <p className="mt-0.5 text-xs text-gray-400">Ejemplos: {sp.examples}</p>}
-                </div>
-              ))}
-            </div>
-          </div>
+          <PotentialProductsSection
+            products={matchingSearchedProducts}
+            supplier={supplier}
+          />
         )}
       </div>
 
@@ -628,6 +552,146 @@ function SupplierMeetingsTable({
 
 /* ── Products Table ── */
 
+function RenderTextWithLinks({ text }: { text: string }) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  const parts = text.split(urlRegex)
+  return (
+    <>
+      {parts.map((part, i) =>
+        urlRegex.test(part) ? (
+          <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all hover:text-blue-800">
+            {part}
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  )
+}
+
+function PotentialProductsSection({ products, supplier }: { products: SearchedProduct[]; supplier: { name: string; emails: string[] } }) {
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null)
+
+  function handleSendEmail() {
+    if (!supplier) return
+    const terms = getTerms()
+    const lines: string[] = []
+    lines.push('Hello,')
+    lines.push('')
+    lines.push('We are looking for the following products. To make our meeting more efficient, please have ready the products that you consider may fit both in terms of specifications and price, also taking into account the examples we send regarding shape or design.')
+    lines.push('')
+    lines.push('Of course, if you have any alternative, we will be happy to see it. If you want to send us the information by email in advance, that would be great too. Please send us the best possible offer along with images and specifications of the product.')
+    lines.push('')
+    lines.push('Please remember that the prices provided must be based on and include our agreed terms and conditions:')
+    lines.push('')
+    lines.push(terms)
+    lines.push('')
+    lines.push('PRODUCTS WE ARE LOOKING FOR:')
+    lines.push('****************************************')
+    lines.push('')
+    products.forEach((sp, i) => {
+      lines.push(`******** Product ${i + 1} ********`)
+      lines.push(`  ${(sp.product_type || '—').toUpperCase()} - ${sp.ref_segment || '—'} / ${sp.brand || '—'}`)
+      lines.push(`  SPECS: ${sp.main_specs ? sp.main_specs.replace(/\n/g, ' | ') : '—'}`)
+      lines.push(`  TARGET PRICE: ${fmtPrice(sp.target_cost)}`)
+      lines.push(`  EXAMPLES: ${sp.examples || '—'}`)
+      lines.push('')
+    })
+    lines.push('Best regards,')
+    lines.push('APPROX Team')
+    const body = lines.join('\n')
+    const currentUser = (localStorage.getItem('hk-fair-user') || 'Jesus') as UserName
+    const cc = getCCEmails(currentUser)
+    const url = buildMailtoUrl(supplier.emails, cc, 'Productos buscados APPROX', body)
+    window.open(url, '_blank')
+  }
+
+  return (
+    <div className="rounded-xl bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-purple-700">
+          Productos Potenciales a encontrar en proveedor ({products.length})
+        </h2>
+        <button
+          onClick={handleSendEmail}
+          className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-medium text-white hover:bg-purple-700"
+        >
+          Enviar email
+        </button>
+      </div>
+      <div className="flex flex-col gap-2">
+        {products.map(sp => (
+          <div key={sp.id}>
+            <button
+              onClick={() => setExpanded(expanded === sp.id ? null : sp.id)}
+              className="w-full rounded-lg border border-purple-200 bg-purple-50 p-3 text-left hover:bg-purple-100 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-800">
+                  {sp.brand || '—'} — {sp.product_type} — {sp.ref_segment || '—'}
+                </span>
+                {sp.target_cost != null && (
+                  <span className="text-xs font-bold text-purple-600">{fmtPrice(sp.target_cost)}</span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-gray-600 truncate">{sp.main_specs || 'Sin specs'}</p>
+            </button>
+            {expanded === sp.id && (
+              <div className="mt-1 rounded-lg border border-purple-300 bg-white p-4 space-y-2">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div><span className="font-semibold text-gray-500">Marca:</span> <span className="text-gray-800">{sp.brand || '—'}</span></div>
+                  <div><span className="font-semibold text-gray-500">Tipo:</span> <span className="text-gray-800">{sp.product_type}</span></div>
+                  <div><span className="font-semibold text-gray-500">Ref/Segmento:</span> <span className="text-gray-800">{sp.ref_segment || '—'}</span></div>
+                  <div><span className="font-semibold text-gray-500">Modelo:</span> <span className="text-gray-800">{sp.model_interno || '—'}</span></div>
+                  <div><span className="font-semibold text-gray-500">Target Cost:</span> <span className="font-bold text-green-700">{fmtPrice(sp.target_cost)}</span></div>
+                  <div><span className="font-semibold text-gray-500">PVPR:</span> <span className="text-gray-800">{fmtPrice(sp.pvpr, 'EUR')}</span></div>
+                  <div><span className="font-semibold text-gray-500">Margen:</span> <span className="text-gray-800">{sp.margin_target || '—'}</span></div>
+                </div>
+                {sp.main_specs && (
+                  <div className="text-xs">
+                    <span className="font-semibold text-gray-500">Specs:</span>
+                    <p className="mt-0.5 whitespace-pre-wrap text-gray-700">{sp.main_specs}</p>
+                  </div>
+                )}
+                {sp.examples && (
+                  <div className="text-xs">
+                    <span className="font-semibold text-gray-500">Examples:</span>
+                    <p className="mt-0.5 whitespace-pre-wrap text-gray-700"><RenderTextWithLinks text={sp.examples} /></p>
+                  </div>
+                )}
+                {sp.photos && sp.photos.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 mb-1">Fotos:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {sp.photos.map((url, i) => (
+                        <img
+                          key={i}
+                          src={url}
+                          alt={`Foto ${i + 1}`}
+                          className="h-16 w-16 cursor-pointer rounded-lg object-cover border border-gray-200 hover:opacity-80"
+                          onClick={() => setEnlargedPhoto(url)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {enlargedPhoto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80" onClick={() => setEnlargedPhoto(null)}>
+          <img src={enlargedPhoto} alt="Foto ampliada" className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain" />
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface SupplierProduct {
   id: string
   meeting_id: string
@@ -717,8 +781,8 @@ function SupplierProductsTable({
               >
                 <td className="px-2 py-2.5 text-gray-600">{p.product_type || '—'}</td>
                 <td className="px-2 py-2.5 font-medium text-gray-800">{p.item_model || '—'}</td>
-                <td className="px-2 py-2.5 text-right text-gray-600">{p.price ? `$${p.price}` : '—'}</td>
-                <td className="px-2 py-2.5 text-right text-gray-600">{p.target_price ? `$${p.target_price}` : '—'}</td>
+                <td className="px-2 py-2.5 text-right text-gray-600">{fmtPrice(p.price)}</td>
+                <td className="px-2 py-2.5 text-right text-gray-600">{fmtPrice(p.target_price)}</td>
                 <td className="px-2 py-2.5 text-right text-gray-600">{p.moq || '—'}</td>
                 <td className="px-2 py-2.5 text-gray-500 max-w-[150px] truncate">{p.features || '—'}</td>
                 <td className="px-2 py-2.5 text-center">

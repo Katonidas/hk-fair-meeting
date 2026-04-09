@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
-import { normalize } from '@/lib/normalize'
+import { areProductTypesRelated } from '@/lib/synonyms'
 import type { Supplier } from '@/types'
 
 // --- Stand parsing ---
@@ -56,6 +56,8 @@ export default function RoutePlanner() {
   // Filters
   const [buildingFilter, setBuildingFilter] = useState('')
   const [productTypeFilter, setProductTypeFilter] = useState('')
+  const [currentPosition, setCurrentPosition] = useState('ENTRADA')
+  const [priorityMode, setPriorityMode] = useState<'auto' | 'relevance' | 'potential'>('auto')
 
   // Sort state
   const [visitedSort, setVisitedSort] = useState<{ key: SortKey; dir: SortDir }>({ key: 'name', dir: 'asc' })
@@ -77,25 +79,19 @@ export default function RoutePlanner() {
   const products = useLiveQuery(() => db.products.toArray(), [])
   const searchedProducts = useLiveQuery(() => db.searched_products.toArray(), [])
 
-  // Compute potential products count per supplier (same logic as matching.ts)
+  // Compute potential products count per supplier (synonym-aware matching)
   const potentialCounts = useMemo(() => {
     if (!suppliers || !searchedProducts) return new Map<string, number>()
     const map = new Map<string, number>()
     for (const s of suppliers) {
-      const supplierTypes = normalize(s.product_type || '')
-        .split(/[,;/]+/)
-        .map(t => t.trim())
-        .filter(t => t.length > 2)
-
       let count = 0
       for (const sp of searchedProducts) {
         if (sp.candidate_supplier_ids?.includes(s.id)) {
           count++
           continue
         }
-        if (supplierTypes.length === 0) continue
-        const spType = normalize(sp.product_type)
-        if (supplierTypes.some(st => spType.includes(st) || st.includes(spType))) {
+        if (!s.product_type) continue
+        if (areProductTypesRelated(s.product_type, sp.product_type)) {
           count++
         }
       }
@@ -136,10 +132,15 @@ export default function RoutePlanner() {
       const potentialCount = potentialCounts.get(s.id) || 0
       const foundCount = foundCounts.get(s.id) || 0
       const relevanceScore = s.relevance === 1 ? 30 : s.relevance === 2 ? 20 : 10
-      const score = relevanceScore * 10 + potentialCount * 3
+      let score: number
+      switch (priorityMode) {
+        case 'relevance': score = relevanceScore; break
+        case 'potential': score = potentialCount; break
+        default: score = relevanceScore * 10 + potentialCount * 3; break
+      }
       return { supplier: s, parsed, building, potentialCount, foundCount, score }
     })
-  }, [suppliers, potentialCounts, foundCounts])
+  }, [suppliers, potentialCounts, foundCounts, priorityMode])
 
   // Split into visited / pending
   const visited = useMemo(() =>
@@ -152,7 +153,18 @@ export default function RoutePlanner() {
     [enrichedSuppliers, visitedSupplierIds]
   )
 
-  // Sort helper
+  // Sort helper — numeric stand sorting
+  function compareStands(a: EnrichedSupplier, b: EnrichedSupplier): number {
+    const ap = a.parsed
+    const bp = b.parsed
+    if (!ap && !bp) return (a.supplier.stand || '').localeCompare(b.supplier.stand || '')
+    if (!ap) return 1
+    if (!bp) return -1
+    if (ap.pavilion !== bp.pavilion) return ap.pavilion - bp.pavilion
+    if (ap.aisle !== bp.aisle) return ap.aisle.localeCompare(bp.aisle)
+    return ap.number - bp.number
+  }
+
   function sortList(list: EnrichedSupplier[], sort: { key: SortKey; dir: SortDir }): EnrichedSupplier[] {
     const sorted = [...list]
     sorted.sort((a, b) => {
@@ -165,7 +177,7 @@ export default function RoutePlanner() {
           cmp = (a.supplier.product_type || '').localeCompare(b.supplier.product_type || '')
           break
         case 'stand':
-          cmp = (a.supplier.stand || '').localeCompare(b.supplier.stand || '')
+          cmp = compareStands(a, b)
           break
         case 'potential':
           cmp = a.potentialCount - b.potentialCount
@@ -187,20 +199,28 @@ export default function RoutePlanner() {
       filtered = filtered.filter(e => e.parsed && pavilions.includes(e.parsed.pavilion))
     }
     if (productTypeFilter.trim()) {
-      const types = productTypeFilter.split(',').map(t => normalize(t.trim())).filter(t => t.length > 0)
+      const types = productTypeFilter.split(',').map(t => t.trim()).filter(t => t.length > 0)
       if (types.length > 0) {
         filtered = filtered.filter(e => {
-          const sType = normalize(e.supplier.product_type || '')
-          return types.some(t => sType.includes(t) || t.includes(sType))
+          return types.some(t => areProductTypesRelated(e.supplier.product_type || '', t))
         })
       }
     }
     return filtered
   }
 
+  // Parse current position to determine starting building/pavilion
+  function parsePosition(): { pavilion: number; aisle: string } | null {
+    const pos = currentPosition.trim().toUpperCase()
+    if (!pos || pos === 'ENTRADA') return null
+    const match = pos.match(/^(\d{1,2})([A-Z])?$/i)
+    if (!match) return null
+    return { pavilion: parseInt(match[1]), aisle: match[2] || 'A' }
+  }
+
   // Route optimization
   function generateRoute() {
-    let candidates = applyFilters(pending)
+    const candidates = applyFilters(pending)
 
     // Group by building
     const buildingGroups = new Map<string, EnrichedSupplier[]>()
@@ -221,24 +241,51 @@ export default function RoutePlanner() {
       const totalScore = items.reduce((sum, e) => sum + e.score, 0)
       buildingScores.push({ building, totalScore, items })
     }
-    // Sort buildings by total score descending
-    buildingScores.sort((a, b) => b.totalScore - a.totalScore)
+
+    // Determine starting building from position
+    const startPos = parsePosition()
+    const startBuilding = startPos ? getBuilding(startPos.pavilion) : null
+
+    // Sort buildings: starting building first, then by score descending
+    buildingScores.sort((a, b) => {
+      if (startBuilding) {
+        if (a.building === startBuilding && b.building !== startBuilding) return -1
+        if (b.building === startBuilding && a.building !== startBuilding) return 1
+      }
+      return b.totalScore - a.totalScore
+    })
 
     // Within each building, sort by pavilion order
     const routeIds: string[] = []
     for (const bg of buildingScores) {
       const pavilionOrder = BUILDINGS[bg.building] || []
-      // Determine direction: check which end pavilion has higher-scoring suppliers
-      const firstPavScore = bg.items
-        .filter(e => e.parsed && e.parsed.pavilion === pavilionOrder[0])
-        .reduce((s, e) => s + e.score, 0)
-      const lastPavScore = bg.items
-        .filter(e => e.parsed && e.parsed.pavilion === pavilionOrder[pavilionOrder.length - 1])
-        .reduce((s, e) => s + e.score, 0)
 
-      const orderedPavilions = lastPavScore > firstPavScore
-        ? [...pavilionOrder].reverse()
-        : [...pavilionOrder]
+      // Determine direction based on starting position or scores
+      let orderedPavilions: number[]
+      if (startPos && bg.building === startBuilding) {
+        // Start from the pavilion closest to our position
+        const startPavIdx = pavilionOrder.indexOf(startPos.pavilion)
+        if (startPavIdx >= 0) {
+          // If near the end (high index), go reverse
+          orderedPavilions = startPavIdx >= pavilionOrder.length / 2
+            ? [...pavilionOrder].reverse()
+            : [...pavilionOrder]
+        } else {
+          orderedPavilions = [...pavilionOrder]
+        }
+      } else {
+        // Default: check which end has higher scores
+        const firstPavScore = bg.items
+          .filter(e => e.parsed && e.parsed.pavilion === pavilionOrder[0])
+          .reduce((s, e) => s + e.score, 0)
+        const lastPavScore = bg.items
+          .filter(e => e.parsed && e.parsed.pavilion === pavilionOrder[pavilionOrder.length - 1])
+          .reduce((s, e) => s + e.score, 0)
+
+        orderedPavilions = lastPavScore > firstPavScore
+          ? [...pavilionOrder].reverse()
+          : [...pavilionOrder]
+      }
 
       // Sort items within building: by pavilion order, then aisle, then stand number
       const pavIndex = new Map<number, number>()
@@ -353,52 +400,78 @@ export default function RoutePlanner() {
 
       {/* Filters */}
       <div className="border-b border-gray-200 bg-white px-4 py-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="flex-1">
-            <label className="mb-1 block text-xs font-medium text-gray-500">Edificio</label>
-            <select
-              value={buildingFilter}
-              onChange={e => { setBuildingFilter(e.target.value); setOptimizedRoute(null) }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              {BUILDING_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex-1">
-            <label className="mb-1 block text-xs font-medium text-gray-500">Tipo producto (separar por coma)</label>
-            <input
-              type="text"
-              value={productTypeFilter}
-              onChange={e => { setProductTypeFilter(e.target.value); setOptimizedRoute(null) }}
-              placeholder="ej: lámpara, mesa, silla"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={generateRoute}
-              className="whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow hover:bg-primary-light active:bg-primary-dark"
-            >
-              Ruta automática
-            </button>
-            <button
-              onClick={saveRoute}
-              disabled={!optimizedRoute}
-              className="whitespace-nowrap rounded-lg border border-primary px-4 py-2 text-sm font-medium text-primary shadow hover:bg-primary hover:text-white disabled:border-gray-300 disabled:text-gray-300 disabled:hover:bg-white"
-            >
-              Guardar ruta
-            </button>
-            {hasSavedRoute && (
-              <button
-                onClick={loadRoute}
-                className="whitespace-nowrap rounded-lg border border-yellow-500 px-4 py-2 text-sm font-medium text-yellow-600 shadow hover:bg-yellow-500 hover:text-white"
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-gray-500">Edificio</label>
+              <select
+                value={buildingFilter}
+                onChange={e => { setBuildingFilter(e.target.value); setOptimizedRoute(null) }}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                Cargar ruta
-              </button>
-            )}
+                {BUILDING_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-gray-500">Tipo producto (separar por coma)</label>
+              <input
+                type="text"
+                value={productTypeFilter}
+                onChange={e => { setProductTypeFilter(e.target.value); setOptimizedRoute(null) }}
+                placeholder="ej: lampara, mesa, silla"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
           </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-gray-500">Posicion actual</label>
+              <input
+                type="text"
+                value={currentPosition}
+                onChange={e => { setCurrentPosition(e.target.value); setOptimizedRoute(null) }}
+                placeholder="Ej: 10A, 3F, ENTRADA"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-gray-500">Priorizar</label>
+              <select
+                value={priorityMode}
+                onChange={e => { setPriorityMode(e.target.value as 'auto' | 'relevance' | 'potential'); setOptimizedRoute(null) }}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="auto">Automatico</option>
+                <option value="relevance">Importancia proveedor</option>
+                <option value="potential">Productos potenciales</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button
+            onClick={generateRoute}
+            className="whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow hover:bg-primary-light active:bg-primary-dark"
+          >
+            GENERAR RUTA
+          </button>
+          <button
+            onClick={saveRoute}
+            disabled={!optimizedRoute}
+            className="whitespace-nowrap rounded-lg border border-primary px-4 py-2 text-sm font-medium text-primary shadow hover:bg-primary hover:text-white disabled:border-gray-300 disabled:text-gray-300 disabled:hover:bg-white"
+          >
+            Guardar ruta
+          </button>
+          {hasSavedRoute && (
+            <button
+              onClick={loadRoute}
+              className="whitespace-nowrap rounded-lg border border-yellow-500 px-4 py-2 text-sm font-medium text-yellow-600 shadow hover:bg-yellow-500 hover:text-white"
+            >
+              Cargar ruta
+            </button>
+          )}
         </div>
         {optimizedRoute && (
           <div className="mt-2 flex items-center gap-2 rounded-lg bg-green-50 px-3 py-1.5 text-xs text-green-700">

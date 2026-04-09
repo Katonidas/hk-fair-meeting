@@ -10,6 +10,7 @@ import { uploadPhoto, compressImage } from '@/lib/storage'
 import { buildMailtoUrl } from '@/lib/emailGenerator'
 import { getCCEmails } from '@/lib/constants'
 import { translateAndCorrect } from '@/lib/translate'
+import { fmtPrice } from '@/lib/price'
 import type { ProductStatus, SampleStatus, UserName } from '@/types'
 
 type SortCol = 'supplierName' | 'supplierStand' | 'product_type' | 'item_model' | 'price' | 'target_price' | 'features' | 'moq' | 'options' | 'sample_status' | 'status'
@@ -306,8 +307,8 @@ export default function CapturedProducts() {
                     <td className="px-2 py-2.5 text-gray-500">{p.supplierStand}</td>
                     <td className="px-2 py-2.5 text-gray-600">{p.product_type || '—'}</td>
                     <td className="px-2 py-2.5 text-gray-600">{p.item_model || '—'}</td>
-                    <td className="px-2 py-2.5 text-right text-gray-600">{p.price ? `$${p.price}` : '—'}</td>
-                    <td className="px-2 py-2.5 text-right text-gray-600">{p.target_price ? `$${p.target_price}` : '—'}</td>
+                    <td className="px-2 py-2.5 text-right text-gray-600">{fmtPrice(p.price)}</td>
+                    <td className="px-2 py-2.5 text-right text-gray-600">{fmtPrice(p.target_price)}</td>
                     <td className="px-2 py-2.5 text-gray-500 max-w-[150px] truncate">{p.features || '—'}</td>
                     <td className="px-2 py-2.5 text-right text-gray-600">{p.moq || '—'}</td>
                     <td className="px-2 py-2.5 text-gray-500 max-w-[100px] truncate">{p.options || '—'}</td>
@@ -663,8 +664,8 @@ export function ProductDetailModal({
                 <DetailField label="Item / Model" value={product.item_model} />
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <DetailField label="Precio" value={product.price ? `$${product.price} ${product.price_currency}` : '—'} />
-                <DetailField label="Target Price" value={product.target_price ? `$${product.target_price}` : '—'} />
+                <DetailField label="Precio" value={fmtPrice(product.price)} />
+                <DetailField label="Target Price" value={fmtPrice(product.target_price)} />
                 <DetailField label="MOQ" value={product.moq?.toString() || '—'} />
               </div>
               <DetailField label="Features / Specs" value={product.features || '—'} />
@@ -835,7 +836,7 @@ function ProductEmailModal({
     lines.push('')
     lines.push(`  PRODUCT TYPE: ${product.product_type || '—'}`)
     lines.push(`  ITEM/MODEL: ${product.item_model || '—'}`)
-    lines.push(`  PRICE: ${product.price != null ? `$${product.price}` : '—'}`)
+    lines.push(`  PRICE: ${fmtPrice(product.price)}`)
     lines.push(`  MOQ: ${product.moq || '—'}`)
     lines.push(`  FEATURES: ${product.features || '—'}`)
     lines.push(`  OPTIONS: ${product.options || '—'}`)

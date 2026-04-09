@@ -8,6 +8,7 @@ import { deleteMeeting } from '@/lib/sync'
 import { formatDate, formatTime } from '@/lib/format'
 import { normalize } from '@/lib/normalize'
 import { USERS } from '@/lib/constants'
+import { areProductTypesRelated } from '@/lib/synonyms'
 import type { UserName, Relevance } from '@/types'
 import type { SearchedProduct } from '@/types/searchedProduct'
 
@@ -62,15 +63,10 @@ export default function Home({ currentUser }: Props) {
       const productCount = allProducts.filter(p => meetingIds.has(p.meeting_id)).length
 
       // Calculate potential products count (matching searched products)
-      const supplierTypes = normalize(s.product_type || '')
-        .split(/[,;/]+/)
-        .map(t => t.trim())
-        .filter(t => t.length > 2)
       const potentialProductCount = allSearchedProducts.filter(sp => {
         if (sp.candidate_supplier_ids?.includes(s.id)) return true
-        if (supplierTypes.length === 0) return false
-        const spType = normalize(sp.product_type)
-        return supplierTypes.some(st => spType.includes(st) || st.includes(spType))
+        if (!s.product_type) return false
+        return areProductTypesRelated(s.product_type, sp.product_type)
       }).length
 
       return {

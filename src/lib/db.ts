@@ -50,6 +50,7 @@ export class FairDB extends Dexie {
     this.version(10).stores({}).upgrade(tx => {
       return tx.table('searched_products').toCollection().modify(sp => {
         if (!sp.candidate_supplier_ids) sp.candidate_supplier_ids = []
+        if (!sp.photos) sp.photos = []
       })
     })
   }

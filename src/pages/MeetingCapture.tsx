@@ -8,6 +8,7 @@ import { formatDate, formatTime } from '@/lib/format'
 import { getMatchingSearchedProducts } from '@/lib/matching'
 import type { UserName, Product, SampleStatus, ProductStatus, Supplier } from '@/types'
 import type { SearchedProduct } from '@/types/searchedProduct'
+import { fmtPrice } from '@/lib/price'
 import { StatusBadge, ProductDetailModal } from '@/pages/CapturedProducts'
 
 interface Props {
@@ -294,39 +295,10 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
 
       {/* Suggested Products Modal */}
       {showSuggestedProducts && suggestedProducts && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowSuggestedProducts(false)}>
-          <div
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 mx-2"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-800">Productos sugeridos</h3>
-              <button onClick={() => setShowSuggestedProducts(false)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">&#10005;</button>
-            </div>
-            {suggestedProducts.length === 0 ? (
-              <p className="py-8 text-center text-sm text-gray-400">No hay productos sugeridos para este proveedor</p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {suggestedProducts.map(sp => (
-                  <div key={sp.id} className="rounded-lg border border-purple-200 bg-purple-50 p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-purple-800">MARCA: {sp.brand || '—'}</span>
-                      {sp.target_cost != null && <span className="text-xs font-bold text-purple-600">TARGET: ${sp.target_cost}</span>}
-                    </div>
-                    <p className="mt-1 text-xs text-gray-700"><span className="font-semibold">TIPO:</span> {sp.product_type}</p>
-                    <p className="mt-1 text-xs text-gray-600"><span className="font-semibold">SPECS:</span> {sp.main_specs || '—'}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-            <button
-              onClick={() => setShowSuggestedProducts(false)}
-              className="mt-4 w-full rounded-xl border border-gray-300 bg-gray-50 py-3 text-sm font-medium text-gray-500 hover:bg-gray-100"
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>
+        <SuggestedProductsModal
+          products={suggestedProducts}
+          onClose={() => setShowSuggestedProducts(false)}
+        />
       )}
 
       {/* Footer */}
@@ -403,7 +375,7 @@ function ProductsTable({
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null)
 
-  const fmt = (n: number | null) => n != null ? n.toFixed(2) : '—'
+  const fmt = (n: number | null) => fmtPrice(n)
 
   return (
     <>
@@ -806,6 +778,112 @@ function PhotoUpload({
         </>
       )}
       {error && <p className="text-[10px] text-red-500">{error}</p>}
+    </div>
+  )
+}
+
+function SuggestedProductsModal({ products, onClose }: { products: SearchedProduct[]; onClose: () => void }) {
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null)
+
+  function renderLinks(text: string) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g
+    const parts = text.split(urlRegex)
+    return parts.map((part, i) =>
+      urlRegex.test(part) ? (
+        <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all hover:text-blue-800">
+          {part}
+        </a>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 mx-2"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-800">Productos sugeridos</h3>
+          <button onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">&#10005;</button>
+        </div>
+        {products.length === 0 ? (
+          <p className="py-8 text-center text-sm text-gray-400">No hay productos sugeridos para este proveedor</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {products.map(sp => (
+              <div key={sp.id}>
+                <button
+                  onClick={() => setExpanded(expanded === sp.id ? null : sp.id)}
+                  className="w-full rounded-lg border border-purple-200 bg-purple-50 p-3 text-left hover:bg-purple-100 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-purple-800">{sp.brand || '—'} — {sp.product_type} — {sp.ref_segment || '—'}</span>
+                    {sp.target_cost != null && <span className="text-xs font-bold text-purple-600">TARGET: {fmtPrice(sp.target_cost)}</span>}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-600 truncate">{sp.main_specs || '—'}</p>
+                </button>
+                {expanded === sp.id && (
+                  <div className="mt-1 rounded-lg border border-purple-300 bg-white p-4 space-y-2">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div><span className="font-semibold text-gray-500">Marca:</span> <span className="text-gray-800">{sp.brand || '—'}</span></div>
+                      <div><span className="font-semibold text-gray-500">Tipo:</span> <span className="text-gray-800">{sp.product_type}</span></div>
+                      <div><span className="font-semibold text-gray-500">Ref/Segmento:</span> <span className="text-gray-800">{sp.ref_segment || '—'}</span></div>
+                      <div><span className="font-semibold text-gray-500">Modelo:</span> <span className="text-gray-800">{sp.model_interno || '—'}</span></div>
+                      <div><span className="font-semibold text-gray-500">Target Cost:</span> <span className="font-bold text-green-700">{fmtPrice(sp.target_cost)}</span></div>
+                      <div><span className="font-semibold text-gray-500">PVPR:</span> <span className="text-gray-800">{fmtPrice(sp.pvpr, 'EUR')}</span></div>
+                      <div><span className="font-semibold text-gray-500">Margen:</span> <span className="text-gray-800">{sp.margin_target || '—'}</span></div>
+                    </div>
+                    {sp.main_specs && (
+                      <div className="text-xs">
+                        <span className="font-semibold text-gray-500">Specs:</span>
+                        <p className="mt-0.5 whitespace-pre-wrap text-gray-700">{sp.main_specs}</p>
+                      </div>
+                    )}
+                    {sp.examples && (
+                      <div className="text-xs">
+                        <span className="font-semibold text-gray-500">Examples:</span>
+                        <p className="mt-0.5 whitespace-pre-wrap text-gray-700">{renderLinks(sp.examples)}</p>
+                      </div>
+                    )}
+                    {sp.photos && sp.photos.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 mb-1">Fotos:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {sp.photos.map((url, i) => (
+                            <img
+                              key={i}
+                              src={url}
+                              alt={`Foto ${i + 1}`}
+                              className="h-16 w-16 cursor-pointer rounded-lg object-cover border border-gray-200 hover:opacity-80"
+                              onClick={() => setEnlargedPhoto(url)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <button
+          onClick={onClose}
+          className="mt-4 w-full rounded-xl border border-gray-300 bg-gray-50 py-3 text-sm font-medium text-gray-500 hover:bg-gray-100"
+        >
+          Cerrar
+        </button>
+      </div>
+
+      {enlargedPhoto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80" onClick={(e) => { e.stopPropagation(); setEnlargedPhoto(null) }}>
+          <img src={enlargedPhoto} alt="Foto ampliada" className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain" />
+        </div>
+      )}
     </div>
   )
 }

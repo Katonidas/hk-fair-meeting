@@ -6,6 +6,9 @@ import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
 import { normalize } from '@/lib/normalize'
 import { getFormulaGame, getFormulaTicnova } from '@/lib/settings'
+import { fmtPrice } from '@/lib/price'
+import { areProductTypesRelated } from '@/lib/synonyms'
+import { uploadPhoto, compressImage } from '@/lib/storage'
 import type { SearchedProduct } from '@/types/searchedProduct'
 import type { Product } from '@/types'
 
@@ -127,6 +130,7 @@ export default function SearchedProducts() {
           model_interno: modelInterno,
           candidate_product_ids: [],
           candidate_supplier_ids: [],
+          photos: [],
           created_at: now,
           updated_at: now,
           synced_at: null,
@@ -262,7 +266,7 @@ export default function SearchedProducts() {
                           </div>
                         )}
                       </td>
-                      <td className="px-2 py-2.5 text-right font-bold text-green-700">{computed ? `$${computed.toFixed(2)}` : '—'}</td>
+                      <td className="px-2 py-2.5 text-right font-bold text-green-700">{fmtPrice(computed)}</td>
                       <td className="px-2 py-1" onClick={e => e.stopPropagation()}>
                         <input
                           type="number"
@@ -387,6 +391,7 @@ function SearchedProductForm({
         ...data,
         candidate_product_ids: [],
         candidate_supplier_ids: [],
+        photos: [],
         created_at: now,
         synced_at: null,
       })
@@ -444,7 +449,7 @@ function SearchedProductForm({
               <div className="flex h-[42px] items-center rounded-lg border border-gray-100 bg-gray-50 px-3 text-sm font-semibold text-green-700">
                 {(() => {
                   const tc = calcTargetCost(brand, pvpr ? parseFloat(pvpr) : null, marginTarget)
-                  return tc ? `$${tc.toFixed(2)}` : '—'
+                  return fmtPrice(tc)
                 })()}
               </div>
             </div>
@@ -521,15 +526,11 @@ function ProductViewModal({
     const meetingMap = new Map(allMeetings.map(m => [m.id, m]))
     const supplierMap = new Map(allSuppliers.map(s => [s.id, s]))
 
-    const productTypeNorm = normalize(product.product_type)
-    const productTypeWords = productTypeNorm.split(/[\s,;/]+/).filter(w => w.length > 2)
-
     const matched = allProducts
       .filter(p => !linkedIds.has(p.id))
       .filter(p => {
-        // Type match: at least one word overlaps
-        const pType = normalize(p.product_type)
-        const typeMatch = productTypeWords.some(w => pType.includes(w) || w.includes(pType))
+        // Type match using synonym-aware matching
+        const typeMatch = areProductTypesRelated(product.product_type, p.product_type)
         if (!typeMatch) return false
 
         // Price match: if we have a target, check range (-30% to +10%)
@@ -627,14 +628,14 @@ function ProductViewModal({
           <div className="rounded-xl border-2 border-green-300 bg-green-50 p-4 text-center">
             <label className="block text-xs font-medium text-green-700">TARGET COMPRA USD</label>
             <p className="mt-1 text-2xl font-bold text-green-800">
-              {computed ? `$${computed.toFixed(2)}` : '—'}
+              {fmtPrice(computed)}
             </p>
           </div>
 
           {/* Pricing */}
           <div className="grid grid-cols-2 gap-3">
             <ViewField label="Margen Target" value={formatMarginDisplay(product.margin_target)} />
-            <ViewField label="PVPR" value={product.pvpr ? `${product.pvpr.toFixed(2)} €` : '—'} />
+            <ViewField label="PVPR" value={fmtPrice(product.pvpr, 'EUR')} />
           </div>
 
           {/* Examples */}
@@ -642,10 +643,13 @@ function ProductViewModal({
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500">Examples / Referencias</label>
               <div className="whitespace-pre-wrap rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                {product.examples}
+                <RenderTextWithLinks text={product.examples} />
               </div>
             </div>
           )}
+
+          {/* Photos */}
+          <SearchedProductPhotos product={product} onEnlarge={setEnlargedPhoto} />
 
           {/* ══════ CANDIDATES SECTION ══════ */}
           <div className="rounded-xl border-2 border-blue-200 bg-blue-50/50 p-4">
@@ -668,7 +672,7 @@ function ProductViewModal({
                 {suggestions && suggestions.length > 0 && !candidateSearch.trim() && (
                   <div className="mb-3">
                     <p className="mb-1.5 text-[11px] font-semibold text-green-700">
-                      Sugerencias automáticas — tipo similar{computed ? ` + precio $${(computed * 0.7).toFixed(0)}–$${(computed * 1.1).toFixed(0)}` : ''}
+                      Sugerencias automaticas — tipo similar{computed ? ` + precio ${fmtPrice(computed * 0.7)}–${fmtPrice(computed * 1.1)}` : ''}
                     </p>
                     <div className="max-h-52 overflow-y-auto rounded-lg border border-green-200 bg-green-50/50">
                       {suggestions.map(p => (
@@ -685,7 +689,7 @@ function ProductViewModal({
                               {p.product_type} — {p.item_model || '?'}
                             </p>
                             <p className="text-gray-500 truncate">
-                              {p.supplierName} · {p.price != null ? `$${p.price}` : '—'} · {p.features || ''}
+                              {p.supplierName} · {fmtPrice(p.price)} · {p.features || ''}
                             </p>
                           </div>
                           <span className="shrink-0 rounded-full bg-green-200 px-2 py-0.5 text-[10px] font-bold text-green-800">
@@ -695,6 +699,11 @@ function ProductViewModal({
                       ))}
                     </div>
                   </div>
+                )}
+                {suggestions && suggestions.length === 0 && !candidateSearch.trim() && (
+                  <p className="mb-3 text-center text-xs text-gray-400">
+                    Sin coincidencias automaticas. Busca manualmente por tipo de producto o specs.
+                  </p>
                 )}
 
                 {/* Manual search */}
@@ -722,7 +731,7 @@ function ProductViewModal({
                             {p.product_type} — {p.item_model || '?'}
                           </p>
                           <p className="text-gray-500 truncate">
-                            {p.supplierName} · {p.price != null ? `$${p.price}` : '—'} · {p.features || ''}
+                            {p.supplierName} · {fmtPrice(p.price)} · {p.features || ''}
                           </p>
                         </div>
                         <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
@@ -775,7 +784,7 @@ function ProductViewModal({
                           </p>
                           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
                             <span className={`font-bold ${priceOk ? 'text-green-700' : priceDiff !== null ? 'text-red-600' : 'text-gray-600'}`}>
-                              Precio: {c.price != null ? `$${c.price.toFixed(2)}` : '—'}
+                              Precio: {fmtPrice(c.price)}
                               {priceDiff !== null && (
                                 <span className="ml-1 font-normal">
                                   ({priceDiff > 0 ? '+' : ''}{priceDiff.toFixed(2)} vs target)
@@ -863,6 +872,107 @@ function ViewField({ label, value }: { label: string; value: string }) {
       <label className="mb-1 block text-xs font-medium text-gray-500">{label}</label>
       <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm text-gray-800">
         {value || '—'}
+      </div>
+    </div>
+  )
+}
+
+function RenderTextWithLinks({ text }: { text: string }) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  const parts = text.split(urlRegex)
+  return (
+    <>
+      {parts.map((part, i) =>
+        urlRegex.test(part) ? (
+          <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all hover:text-blue-800">
+            {part}
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  )
+}
+
+function SearchedProductPhotos({ product, onEnlarge }: { product: SearchedProduct; onEnlarge: (url: string) => void }) {
+  const [photos, setPhotos] = useState<string[]>(product.photos || [])
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+
+  async function handleAddPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    setUploading(true)
+    try {
+      const newUrls: string[] = []
+      for (const file of Array.from(files)) {
+        const compressed = await compressImage(file, 1200, 0.8)
+        const url = await uploadPhoto(compressed, 'products')
+        if (url) newUrls.push(url)
+      }
+      const updated = [...photos, ...newUrls]
+      setPhotos(updated)
+      await db.searched_products.update(product.id, { photos: updated, updated_at: new Date().toISOString() })
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+      if (cameraRef.current) cameraRef.current.value = ''
+    }
+  }
+
+  async function handleRemovePhoto(idx: number) {
+    const updated = photos.filter((_, i) => i !== idx)
+    setPhotos(updated)
+    await db.searched_products.update(product.id, { photos: updated, updated_at: new Date().toISOString() })
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-medium text-gray-500">Fotos ({photos.length})</p>
+      {photos.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {photos.map((url, i) => (
+            <div key={i} className="relative">
+              <img
+                src={url}
+                alt={`Foto ${i + 1}`}
+                className="h-20 w-20 cursor-pointer rounded-lg border border-gray-200 object-cover hover:opacity-80"
+                onClick={() => onEnlarge(url)}
+              />
+              <button
+                onClick={() => handleRemovePhoto(i)}
+                className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white"
+              >
+                x
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        {uploading ? (
+          <p className="text-xs text-gray-400">Subiendo foto...</p>
+        ) : (
+          <>
+            {isMobile ? (
+              <>
+                <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleAddPhoto} className="hidden" />
+                <button onClick={() => cameraRef.current?.click()}
+                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary">
+                  Foto
+                </button>
+              </>
+            ) : null}
+            <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.webp" multiple onChange={handleAddPhoto} className="hidden" />
+            <button onClick={() => fileRef.current?.click()}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary">
+              Subir fotos
+            </button>
+          </>
+        )}
       </div>
     </div>
   )

@@ -11,6 +11,7 @@ export interface SearchedProduct {
   model_interno: string
   candidate_product_ids: string[]
   candidate_supplier_ids: string[]
+  photos: string[]
   created_at: string
   updated_at: string
   synced_at: string | null
