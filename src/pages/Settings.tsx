@@ -18,6 +18,7 @@ export default function Settings({ currentUser }: Props) {
   const [importResult, setImportResult] = useState<string | null>(null)
   const [backingUp, setBackingUp] = useState(false)
   const [backupResult, setBackupResult] = useState<string | null>(null)
+  const [showHelp, setShowHelp] = useState(false)
   const [terms, setTermsState] = useState(getTerms())
   const [qos, setQosState] = useState(getQOS())
   const [ccEmails, setCcEmailsState] = useState(getCCEmailsSetting())
@@ -213,6 +214,93 @@ export default function Settings({ currentUser }: Props) {
           <h2 className="mb-2 text-sm font-semibold text-gray-700">Usuario actual</h2>
           <p className="text-sm text-gray-600">{currentUser}</p>
         </div>
+
+        {/* Help */}
+        <button
+          onClick={() => setShowHelp(true)}
+          className="w-full rounded-xl border-2 border-primary/30 bg-primary/5 p-4 text-left transition-colors hover:bg-primary/10"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">&#9432;</span>
+            <div>
+              <h2 className="text-sm font-semibold text-primary">Instrucciones de uso</h2>
+              <p className="text-xs text-gray-500">Como funciona la app, modo offline, sincronizacion...</p>
+            </div>
+          </div>
+        </button>
+
+        {showHelp && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowHelp(false)}>
+            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 mx-4" onClick={e => e.stopPropagation()}>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-gray-800">Instrucciones de uso</h3>
+                <button onClick={() => setShowHelp(false)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">&#10005;</button>
+              </div>
+
+              <div className="space-y-4 text-sm text-gray-700">
+                <div>
+                  <h4 className="font-bold text-gray-800 mb-2">Como funciona</h4>
+                  <ol className="list-decimal list-inside space-y-1.5">
+                    <li><strong>Primera vez (con conexion):</strong> el navegador descarga toda la app y el Service Worker la cachea localmente</li>
+                    <li><strong>Sin conexion:</strong> la app se carga desde la cache del Service Worker. Todos los datos se leen/escriben en IndexedDB (Dexie.js) dentro del navegador</li>
+                    <li><strong>Vuelve la conexion:</strong> el sync automatico (cada 30s) envia los cambios locales a Supabase y descarga los de otros usuarios</li>
+                  </ol>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-green-700 mb-2">Lo que funciona SIN conexion</h4>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Abrir la app (carga desde cache)</li>
+                    <li>Ver proveedores, reuniones, productos (todo esta en IndexedDB)</li>
+                    <li>Crear/editar reuniones y productos</li>
+                    <li>Hacer fotos y adjuntarlas (se guardan como base64 en IndexedDB)</li>
+                    <li>Generar emails (mailto)</li>
+                    <li>Planificador de rutas</li>
+                    <li>Todo el flujo de trabajo normal</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-red-600 mb-2">Lo que NO funciona sin conexion</h4>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Sync con otros usuarios</li>
+                    <li>Boton TRADUCIR/CORREGIR (necesita Google Translate API)</li>
+                    <li>Subir fotos a Supabase Storage (se guardan local como base64, suben cuando vuelva la conexion)</li>
+                    <li>Backup manual al servidor</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-gray-800 mb-2">Indicador visual</h4>
+                  <p className="mb-1">El indicador en la cabecera muestra:</p>
+                  <ul className="space-y-1">
+                    <li><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500"></span> <strong className="text-green-600">Sincronizado</strong></span> — todo OK</li>
+                    <li><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-yellow-400"></span> <strong className="text-yellow-600">Sincronizando...</strong></span> — enviando/recibiendo datos</li>
+                    <li><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-400"></span> <strong className="text-gray-500">Offline</strong></span> — sin conexion, trabajando en local</li>
+                  </ul>
+                </div>
+
+                <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
+                  <h4 className="font-bold text-amber-800 mb-2">Requisito importante</h4>
+                  <p className="text-amber-900">
+                    Cada usuario debe <strong>abrir la app al menos una vez con conexion</strong> antes de la feria para que el Service Worker descargue todo.
+                    Despues funciona offline sin problema.
+                  </p>
+                  <p className="mt-2 text-amber-900 font-medium">
+                    Recomendacion: en el hotel, antes de ir a la feria, abrir la app y esperar a que diga "Sincronizado".
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowHelp(false)}
+                className="mt-4 w-full rounded-xl bg-primary py-3 text-sm font-bold text-white hover:bg-primary-light"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Email Templates */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
