@@ -405,7 +405,7 @@ export function ProductDetailModal({
         onClick={e => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-gray-800">Detalle del producto</h3>
+          <h3 className="text-lg font-bold text-gray-800">{product.product_type || 'Producto'}{product.item_model ? ` — ${product.item_model}` : ''}</h3>
           <div className="flex items-center gap-2">
             {!editing && (
               <button
