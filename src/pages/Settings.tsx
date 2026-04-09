@@ -16,6 +16,8 @@ export default function Settings({ currentUser }: Props) {
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [importResult, setImportResult] = useState<string | null>(null)
+  const [backingUp, setBackingUp] = useState(false)
+  const [backupResult, setBackupResult] = useState<string | null>(null)
   const [terms, setTermsState] = useState(getTerms())
   const [qos, setQosState] = useState(getQOS())
   const [ccEmails, setCcEmailsState] = useState(getCCEmailsSetting())
@@ -310,6 +312,43 @@ export default function Settings({ currentUser }: Props) {
           </button>
         </div>
 
+        {/* Backup */}
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <h2 className="mb-2 text-sm font-semibold text-blue-700">Copia de seguridad</h2>
+          <p className="mb-3 text-xs text-blue-600">
+            Backup automático diario a las 03:00 (hora China) del 11 al 17 de abril.
+            También puedes hacer un backup manual en cualquier momento.
+          </p>
+          {backupResult && (
+            <p className={`mb-3 text-xs ${backupResult.startsWith('Error') ? 'text-red-600' : 'text-green-700 font-medium'}`}>
+              {backupResult}
+            </p>
+          )}
+          <button
+            onClick={async () => {
+              setBackingUp(true)
+              setBackupResult(null)
+              try {
+                const res = await fetch('/api/backup-manual')
+                const data = await res.json()
+                if (data.success) {
+                  setBackupResult(`Backup guardado: ${data.fileName} — ${data.summary.total_suppliers} proveedores, ${data.summary.total_meetings} reuniones, ${data.summary.total_products} productos`)
+                } else if (data.error) {
+                  setBackupResult(`Error: ${data.error}${data.detail ? ' — ' + data.detail : ''}`)
+                }
+              } catch (err) {
+                setBackupResult('Error: No se pudo conectar con el servidor')
+              } finally {
+                setBackingUp(false)
+              }
+            }}
+            disabled={backingUp}
+            className="w-full rounded-lg bg-blue-600 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+          >
+            {backingUp ? 'Haciendo backup...' : 'Hacer backup manual ahora'}
+          </button>
+        </div>
+
         {/* Danger Zone */}
         <div className="rounded-xl border border-red-200 bg-red-50 p-4">
           <h2 className="mb-2 text-sm font-semibold text-red-700">Zona peligrosa</h2>
@@ -319,6 +358,7 @@ export default function Settings({ currentUser }: Props) {
                 const pwd = window.prompt('Contraseña para borrar reuniones:')
                 if (pwd !== 'APPROX') { if (pwd !== null) window.alert('Contraseña incorrecta'); return }
                 if (!window.confirm('¿Borrar TODAS las reuniones y sus productos?')) return
+
                 await db.products.clear()
                 await db.product_photos.clear()
                 await db.meetings.clear()
