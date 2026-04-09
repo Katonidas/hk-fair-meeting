@@ -130,7 +130,14 @@ async function pushProducts() {
     const row = toSupabaseProduct(p)
     const { error } = await supabase.from('products').upsert(row, { onConflict: 'id' })
     if (error) {
-      console.error('Push product error:', p.id, error)
+      // If supplier_id column doesn't exist, retry without it
+      if (error.message?.includes('supplier_id')) {
+        const { supplier_id: _, ...rowWithout } = row as Record<string, unknown>
+        const { error: e2 } = await supabase.from('products').upsert(rowWithout, { onConflict: 'id' })
+        if (e2) console.error('Push product error (retry):', p.id, e2)
+      } else {
+        console.error('Push product error:', p.id, error)
+      }
     }
   }
 }
@@ -322,10 +329,9 @@ function fromSupabaseMeeting(r: Record<string, unknown>): Meeting {
 }
 
 function toSupabaseProduct(p: Product) {
-  return {
+  const row: Record<string, unknown> = {
     id: p.id,
     meeting_id: p.meeting_id || null,
-    supplier_id: p.supplier_id || null,
     product_type: p.product_type,
     item_model: p.item_model,
     price: p.price,
@@ -341,6 +347,9 @@ function toSupabaseProduct(p: Product) {
     status: p.status,
     created_at: p.created_at,
   }
+  // Only include supplier_id if it has a value (column may not exist in Supabase yet)
+  if (p.supplier_id) row.supplier_id = p.supplier_id
+  return row
 }
 
 function fromSupabaseProduct(r: Record<string, unknown>): Product {
