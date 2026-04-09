@@ -68,7 +68,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
     // Sync empty supplier fields with meeting contact data
     if (supplier) {
       const updates: Partial<Supplier> = {}
-      if (!supplier.assigned_person && contactName.trim()) updates.assigned_person = contactName.trim()
+      if (!supplier.contact_person && contactName.trim()) updates.contact_person = contactName.trim()
       if ((!supplier.emails || supplier.emails.length === 0) && contactEmail.trim()) {
         updates.emails = contactEmail.split(',').map(e => e.trim()).filter(Boolean)
       }

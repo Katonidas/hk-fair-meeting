@@ -65,7 +65,18 @@ export default function Home({ currentUser, onLogout }: Props) {
     let filtered = enriched
     if (search) {
       const q = normalize(search)
-      filtered = filtered.filter(s => normalize(s.name).includes(q) || normalize(s.stand).includes(q))
+      filtered = filtered.filter(s =>
+        normalize(s.name).includes(q) ||
+        normalize(s.stand).includes(q) ||
+        normalize(s.product_type).includes(q) ||
+        normalize(s.assigned_person).includes(q) ||
+        normalize(s.contact_person || '').includes(q) ||
+        (q === 'imprescindible' && s.relevance === 1) ||
+        (q === 'importante' && s.relevance === 2) ||
+        (q === 'opcional' && s.relevance === 3) ||
+        ((q === 'nuevo' || q === 'si' || q === 'new') && s.is_new) ||
+        ((q === 'no nuevo' || q === 'existente') && !s.is_new)
+      )
     }
     if (productFilter) {
       const pf = normalize(productFilter)
@@ -287,6 +298,7 @@ function NewSupplierModal({
   const [phone, setPhone] = useState('')
   const [assignedPerson, setAssignedPerson] = useState('')
   const [relevance, setRelevance] = useState<Relevance>(2)
+  const [isNew, setIsNew] = useState(true)
   const [pendingTopics, setPendingTopics] = useState('')
   const [supplierNotes, setSupplierNotes] = useState('')
   const [saving, setSaving] = useState(false)
@@ -314,7 +326,7 @@ function NewSupplierModal({
       has_catalogue: false,
       current_products: '',
       supplier_notes: supplierNotes.trim(),
-      is_new: true,
+      is_new: isNew,
       updated_at: now,
       updated_by: currentUser,
       created_at: now,
@@ -380,6 +392,15 @@ function NewSupplierModal({
                     }`}>{r === 1 ? 'IMPRESCINDIBLE' : r === 2 ? 'IMPORTANTE' : 'OPCIONAL'}</button>
                 ))}
               </div>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Nuevo proveedor</label>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setIsNew(true)}
+                className={`flex-1 rounded-lg py-2.5 text-sm font-medium ${isNew ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>Sí</button>
+              <button type="button" onClick={() => setIsNew(false)}
+                className={`flex-1 rounded-lg py-2.5 text-sm font-medium ${!isNew ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>No</button>
             </div>
           </div>
           <div>

@@ -53,6 +53,7 @@ export default function SupplierDetail({ currentUser }: Props) {
   const [visited, setVisited] = useState(false)
   const [pendingTopics, setPendingTopics] = useState('')
   const [interestingProducts, setInterestingProducts] = useState('')
+  const [isNew, setIsNew] = useState(false)
   const [hasCatalogue, setHasCatalogue] = useState(false)
   const [currentProducts, setCurrentProducts] = useState('')
   const [supplierNotes, setSupplierNotes] = useState('')
@@ -67,6 +68,7 @@ export default function SupplierDetail({ currentUser }: Props) {
       setContactPerson(supplier.contact_person || '')
       setProductType(supplier.product_type)
       setRelevance(supplier.relevance)
+      setIsNew(supplier.is_new)
       setVisited(supplier.visited)
       setPendingTopics(supplier.pending_topics)
       setInterestingProducts(supplier.interesting_products)
@@ -88,6 +90,7 @@ export default function SupplierDetail({ currentUser }: Props) {
       contact_person: contactPerson.trim(),
       product_type: productType.trim(),
       relevance,
+      is_new: isNew,
       visited,
       pending_topics: pendingTopics.trim(),
       interesting_products: interestingProducts.trim(),
@@ -193,14 +196,23 @@ export default function SupplierDetail({ currentUser }: Props) {
                   </div>
                 </div>
               </div>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Nuevo proveedor</label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setIsNew(true)}
+                      className={`flex-1 rounded-lg py-2 text-sm font-medium ${isNew ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>Sí</button>
+                    <button type="button" onClick={() => setIsNew(false)}
+                      className={`flex-1 rounded-lg py-2 text-sm font-medium ${!isNew ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>No</button>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 pt-5">
                   <input type="checkbox" checked={visited} onChange={e => setVisited(e.target.checked)} className="h-4 w-4 rounded" />
                   <span className="text-sm text-gray-600">Visitado</span>
                 </label>
-                <label className="flex items-center gap-2">
+                <label className="flex items-center gap-2 pt-5">
                   <input type="checkbox" checked={hasCatalogue} onChange={e => setHasCatalogue(e.target.checked)} className="h-4 w-4 rounded" />
-                  <span className="text-sm text-gray-600">Tiene catálogo</span>
+                  <span className="text-sm text-gray-600">Catálogo</span>
                 </label>
               </div>
               <div>
@@ -223,6 +235,7 @@ export default function SupplierDetail({ currentUser }: Props) {
               <InfoRow label="Emails" value={supplier.emails.join(', ') || '—'} />
               <InfoRow label="Persona asignada" value={supplier.assigned_person || '—'} />
               <InfoRow label="Relevancia" value={supplier.relevance === 1 ? 'IMPRESCINDIBLE' : supplier.relevance === 2 ? 'IMPORTANTE' : 'OPCIONAL'} />
+              <InfoRow label="Nuevo proveedor" value={supplier.is_new ? 'Sí' : 'No'} />
               <InfoRow label="Visitado" value={supplier.visited ? 'Sí' : 'No'} />
               <InfoRow label="Catálogo" value={supplier.has_catalogue ? 'Sí' : 'No'} />
               {supplier.pending_topics && (
