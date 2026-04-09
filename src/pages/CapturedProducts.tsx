@@ -301,8 +301,11 @@ export function ProductDetailModal({
   const [sampleUnits, setSampleUnits] = useState(product.sample_units?.toString() || '1')
   const [photos, setPhotos] = useState<string[]>(product.photos || [])
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [showWebcam, setShowWebcam] = useState(false)
+  const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
 
   async function handleStatusChange(newStatus: ProductStatus) {
@@ -350,6 +353,41 @@ export function ProductDetailModal({
       if (cameraRef.current) cameraRef.current.value = ''
       if (fileRef.current) fileRef.current.value = ''
     }
+  }
+
+  async function openWebcam() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } }
+      })
+      setWebcamStream(stream)
+      setShowWebcam(true)
+      setTimeout(() => {
+        if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play() }
+      }, 100)
+    } catch { /* ignore */ }
+  }
+
+  function closeWebcam() {
+    if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); setWebcamStream(null) }
+    setShowWebcam(false)
+  }
+
+  async function captureWebcam() {
+    if (!videoRef.current) return
+    const canvas = document.createElement('canvas')
+    canvas.width = videoRef.current.videoWidth
+    canvas.height = videoRef.current.videoHeight
+    canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0)
+    closeWebcam()
+    setUploadingPhoto(true)
+    try {
+      const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/jpeg', 0.85))
+      if (!blob) return
+      const file = new File([blob], 'webcam.jpg', { type: 'image/jpeg' })
+      const url = await uploadPhoto(file, 'products')
+      if (url) { const u = [...photos, url]; setPhotos(u); await db.products.update(product.id, { photos: u }) }
+    } finally { setUploadingPhoto(false) }
   }
 
   async function handleRemovePhoto(index: number) {
@@ -574,9 +612,11 @@ export function ProductDetailModal({
                         </button>
                       </>
                     ) : (
-                      <>
-                        <input ref={cameraRef} type="file" accept="image/*" onChange={handleAddPhoto} className="hidden" />
-                      </>
+                      <button onClick={openWebcam}
+                        className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        Foto
+                      </button>
                     )}
                     <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.webp" onChange={handleAddPhoto} className="hidden" />
                     <button onClick={() => fileRef.current?.click()}
@@ -586,6 +626,16 @@ export function ProductDetailModal({
                     </button>
                   </>
                 )}
+              </div>
+            )}
+            {/* Webcam overlay */}
+            {showWebcam && (
+              <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/80">
+                <video ref={videoRef} autoPlay playsInline muted className="max-h-[60vh] max-w-[90vw] rounded-lg" />
+                <div className="mt-4 flex gap-3">
+                  <button onClick={captureWebcam} className="rounded-full bg-white px-6 py-3 text-sm font-bold text-gray-800">Capturar</button>
+                  <button onClick={closeWebcam} className="rounded-full bg-gray-600 px-6 py-3 text-sm text-white">Cancelar</button>
+                </div>
               </div>
             )}
           </div>
