@@ -1,11 +1,12 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
 import JSZip from 'jszip'
 import { db } from '@/lib/db'
 import { normalize } from '@/lib/normalize'
-import { uploadPhoto } from '@/lib/storage'
+import { uploadPhoto, compressImage } from '@/lib/storage'
 import type { ProductStatus, SampleStatus } from '@/types'
 
 type SortCol = 'supplierName' | 'supplierStand' | 'product_type' | 'item_model' | 'price' | 'target_price' | 'features' | 'moq' | 'options' | 'sample_status' | 'status'
@@ -39,6 +40,7 @@ export default function CapturedProducts() {
   const [sortAsc, setSortAsc] = useState(true)
   const [selectedProduct, setSelectedProduct] = useState<EnrichedProduct | null>(null)
   const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null)
+  const [showNewProduct, setShowNewProduct] = useState(false)
 
   const products = useLiveQuery(async () => {
     const savedMeetings = await db.meetings.where('status').equals('saved').toArray()
@@ -208,6 +210,12 @@ export default function CapturedProducts() {
           ← Volver a inicio
         </button>
         <div className="mb-3 flex gap-2">
+          <button
+            onClick={() => setShowNewProduct(true)}
+            className="rounded-lg bg-primary px-4 py-3 text-xs font-medium text-white hover:bg-primary-light"
+          >
+            + Nuevo producto
+          </button>
           <input
             type="text"
             placeholder="Buscar por proveedor, tipo, modelo, features..."
@@ -326,6 +334,11 @@ export default function CapturedProducts() {
           onClose={() => setSelectedProduct(null)}
           onPhotoClick={setEnlargedPhoto}
         />
+      )}
+
+      {/* New Product Modal */}
+      {showNewProduct && (
+        <NewProductModal onClose={() => setShowNewProduct(false)} />
       )}
 
       {/* Enlarged Photo */}
@@ -751,6 +764,286 @@ function DetailField({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-xs font-medium text-gray-500">{label}</p>
       <p className="text-sm text-gray-800 whitespace-pre-wrap">{value || '—'}</p>
+    </div>
+  )
+}
+
+function NewProductModal({ onClose }: { onClose: () => void }) {
+  const suppliers = useLiveQuery(() => db.suppliers.orderBy('name').toArray(), [])
+  const [supplierId, setSupplierId] = useState('')
+  const [supplierSearch, setSupplierSearch] = useState('')
+  const [productType, setProductType] = useState('')
+  const [itemModel, setItemModel] = useState('')
+  const [price, setPrice] = useState('')
+  const [targetPrice, setTargetPrice] = useState('')
+  const [features, setFeatures] = useState('')
+  const [moq, setMoq] = useState('')
+  const [options, setOptions] = useState('')
+  const [sampleStatus, setSampleStatus] = useState<SampleStatus>('no')
+  const [sampleUnits, setSampleUnits] = useState('1')
+  const [observations, setObservations] = useState('')
+  const [status, setStatus] = useState<ProductStatus>('interesting')
+  const [photos, setPhotos] = useState<string[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const filteredSuppliers = suppliers?.filter(s => {
+    if (!supplierSearch) return true
+    const q = supplierSearch.toLowerCase()
+    return s.name.toLowerCase().includes(q) || s.stand.toLowerCase().includes(q)
+  }) || []
+
+  const selectedSupplier = suppliers?.find(s => s.id === supplierId)
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    setUploading(true)
+    try {
+      const newUrls: string[] = []
+      for (const file of Array.from(files)) {
+        const compressed = await compressImage(file, 1200, 0.8)
+        const url = await uploadPhoto(compressed, 'products')
+        if (url) newUrls.push(url)
+      }
+      setPhotos(prev => [...prev, ...newUrls])
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  async function handleSave() {
+    if (!supplierId || !productType.trim()) return
+    setSaving(true)
+    try {
+      const now = new Date().toISOString()
+
+      // Find or create a "saved" meeting for this supplier
+      const existingMeetings = await db.meetings
+        .where('supplier_id').equals(supplierId)
+        .filter(m => m.status === 'saved')
+        .toArray()
+
+      let meetingId: string
+      if (existingMeetings.length > 0) {
+        meetingId = existingMeetings[0].id
+      } else {
+        // Create a minimal saved meeting
+        meetingId = uuid()
+        await db.meetings.add({
+          id: meetingId,
+          supplier_id: supplierId,
+          user_name: 'Jesús',
+          location: 'feria',
+          status: 'saved',
+          visited_at: now,
+          urgent_notes: '',
+          other_notes: '',
+          business_card_photo_url: '',
+          stand_photo_url: '',
+          email_generated: false,
+          email_sent_at: null,
+          created_at: now,
+          updated_at: now,
+          synced_at: null,
+        })
+      }
+
+      await db.products.add({
+        id: uuid(),
+        meeting_id: meetingId,
+        product_type: productType.trim(),
+        item_model: itemModel.trim(),
+        price: price ? parseFloat(price) : null,
+        price_currency: 'USD',
+        target_price: targetPrice ? parseFloat(targetPrice) : null,
+        features: features.trim(),
+        moq: moq ? parseInt(moq) : null,
+        options: options.trim(),
+        sample_status: sampleStatus,
+        sample_units: sampleUnits ? parseInt(sampleUnits) : null,
+        observations: observations.trim(),
+        photos,
+        status,
+        created_at: now,
+      })
+
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const fieldCls = 'w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-primary focus:outline-none'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-800">Nuevo producto</h3>
+          <button onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">✕</button>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          {/* Supplier selection (required) */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-red-500">Proveedor * (obligatorio)</label>
+            {selectedSupplier ? (
+              <div className="flex items-center justify-between rounded-lg border-2 border-primary bg-primary/5 px-3 py-2.5">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{selectedSupplier.name}</p>
+                  <p className="text-xs text-gray-500">Stand {selectedSupplier.stand}</p>
+                </div>
+                <button
+                  onClick={() => setSupplierId('')}
+                  className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100"
+                >
+                  Cambiar
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  placeholder="Buscar proveedor por nombre o stand..."
+                  value={supplierSearch}
+                  onChange={e => setSupplierSearch(e.target.value)}
+                  className={fieldCls}
+                  autoFocus
+                />
+                <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-gray-200">
+                  {filteredSuppliers.length > 0 ? (
+                    filteredSuppliers.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => { setSupplierId(s.id); setSupplierSearch('') }}
+                        className="flex w-full items-center justify-between border-b border-gray-100 px-3 py-2 text-left text-xs hover:bg-blue-50"
+                      >
+                        <span className="font-medium text-gray-800">{s.name}</span>
+                        <span className="text-gray-400">Stand {s.stand}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="px-3 py-3 text-center text-xs text-gray-400">Sin proveedores</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Product fields */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Tipo de producto *</label>
+              <input type="text" value={productType} onChange={e => setProductType(e.target.value)} className={fieldCls} placeholder="LED panel, cable..." />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Item / Model</label>
+              <input type="text" value={itemModel} onChange={e => setItemModel(e.target.value)} className={fieldCls} placeholder="ABC-123" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Precio (USD)</label>
+              <input type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={fieldCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Target Price</label>
+              <input type="number" step="0.01" value={targetPrice} onChange={e => setTargetPrice(e.target.value)} className={fieldCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">MOQ</label>
+              <input type="number" value={moq} onChange={e => setMoq(e.target.value)} className={fieldCls} />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Features / Specs</label>
+            <textarea value={features} onChange={e => setFeatures(e.target.value)} rows={2} className={fieldCls} placeholder="Material, dimensiones, certificaciones..." />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Options (extras)</label>
+            <textarea value={options} onChange={e => setOptions(e.target.value)} rows={2} className={fieldCls} placeholder="Colores disponibles, logo, packaging..." />
+          </div>
+
+          {/* Sample */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Sample</label>
+            <div className="flex gap-2">
+              <div className="w-16 shrink-0">
+                <input type="number" value={sampleUnits} onChange={e => setSampleUnits(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-2 py-2.5 text-center text-sm focus:border-primary focus:outline-none" min="1" />
+              </div>
+              {([['collected', 'Recogido'], ['pending', 'Pdte envío'], ['no', 'No']] as const).map(([val, label]) => (
+                <button key={val} type="button" onClick={() => setSampleStatus(val)}
+                  className={`flex-1 rounded-lg py-2.5 text-xs font-medium transition-colors ${
+                    sampleStatus === val ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'
+                  }`}>{label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Estado</label>
+            <div className="flex gap-2">
+              {([
+                ['discarded', 'DESCARTADO', 'bg-red-500 text-white', 'bg-red-50 text-red-500 border-red-200'],
+                ['interesting', 'INTERESANTE', 'bg-orange-500 text-white', 'bg-orange-50 text-orange-500 border-orange-200'],
+                ['selected', 'SELECCIONADO', 'bg-green-500 text-white', 'bg-green-50 text-green-500 border-green-200'],
+              ] as const).map(([val, label, activeCls, inactiveCls]) => (
+                <button key={val} type="button" onClick={() => setStatus(val)}
+                  className={`flex-1 rounded-lg border py-2.5 text-xs font-bold transition-colors ${
+                    status === val ? activeCls : inactiveCls
+                  }`}>{label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Photos */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Fotos</label>
+            {photos.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {photos.map((url, i) => (
+                  <div key={i} className="relative">
+                    <img src={url} alt={`Foto ${i + 1}`} className="h-16 w-16 rounded-lg object-cover" />
+                    <button type="button" onClick={() => setPhotos(photos.filter((_, idx) => idx !== i))}
+                      className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">x</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <input ref={fileRef} type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" />
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 py-3 text-xs text-gray-400 transition-colors hover:border-primary hover:text-primary disabled:opacity-50">
+              {uploading ? 'Subiendo...' : 'Añadir fotos'}
+            </button>
+          </div>
+
+          {/* Observations */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Observaciones</label>
+            <textarea value={observations} onChange={e => setObservations(e.target.value)} rows={2} className={fieldCls} placeholder="Notas adicionales..." />
+          </div>
+
+          {/* Save */}
+          <button
+            onClick={handleSave}
+            disabled={saving || !supplierId || !productType.trim()}
+            className="mt-2 w-full rounded-lg bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark disabled:opacity-50"
+          >
+            {saving ? 'Guardando...' : 'Crear producto'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
