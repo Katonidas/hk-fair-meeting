@@ -9,6 +9,7 @@ export interface SearchedProduct {
   margin_target: string
   pvpr: number | null
   model_interno: string
+  candidate_product_ids: string[]
   created_at: string
   updated_at: string
   synced_at: string | null

@@ -40,6 +40,13 @@ export class FairDB extends Dexie {
         }
       })
     })
+    this.version(9).stores({}).upgrade(tx => {
+      return tx.table('searched_products').toCollection().modify(sp => {
+        if (!sp.candidate_product_ids) {
+          sp.candidate_product_ids = []
+        }
+      })
+    })
   }
 }
 

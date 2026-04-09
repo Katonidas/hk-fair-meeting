@@ -7,6 +7,7 @@ import { db } from '@/lib/db'
 import { normalize } from '@/lib/normalize'
 import { getFormulaGame, getFormulaTicnova } from '@/lib/settings'
 import type { SearchedProduct } from '@/types/searchedProduct'
+import type { Product } from '@/types'
 
 function formatMarginDisplay(margin: string): string {
   if (!margin) return '—'
@@ -124,6 +125,7 @@ export default function SearchedProducts() {
           margin_target: marginTarget,
           pvpr: pvpr ? parseFloat(pvpr.replace(/[^0-9.,]/g, '').replace(',', '.')) || null : null,
           model_interno: modelInterno,
+          candidate_product_ids: [],
           created_at: now,
           updated_at: now,
           synced_at: null,
@@ -235,6 +237,7 @@ export default function SearchedProducts() {
                   <th className="px-2 py-2 text-right font-semibold text-gray-500 w-20">Margen %</th>
                   <th className="px-2 py-2 text-right font-semibold text-gray-500 w-20">PVPR €</th>
                   <th className="px-2 py-2 text-left font-semibold text-gray-500">Modelo</th>
+                  <th className="px-2 py-2 text-center font-semibold text-gray-500 w-20">Candidatos</th>
                   <th className="px-2 py-2 text-center font-semibold text-gray-500 w-16"></th>
                 </tr>
               </thead>
@@ -289,6 +292,15 @@ export default function SearchedProducts() {
                         />
                       </td>
                       <td className="px-2 py-2.5 text-gray-500">{p.model_interno || '—'}</td>
+                      <td className="px-2 py-2.5 text-center">
+                        {(p.candidate_product_ids?.length || 0) > 0 ? (
+                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                            {p.candidate_product_ids.length}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">0</span>
+                        )}
+                      </td>
                       <td className="px-2 py-2.5 text-center" onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1 justify-center">
                           <button
@@ -372,6 +384,7 @@ function SearchedProductForm({
       await db.searched_products.add({
         id: uuid(),
         ...data,
+        candidate_product_ids: [],
         created_at: now,
         synced_at: null,
       })
@@ -458,10 +471,85 @@ function ProductViewModal({
   onEdit: () => void
 }) {
   const computed = calcTargetCost(product.brand, product.pvpr, product.margin_target)
+  const [showCandidateSearch, setShowCandidateSearch] = useState(false)
+  const [candidateSearch, setCandidateSearch] = useState('')
+  const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null)
+
+  // Load candidate products (enriched with supplier info)
+  const candidates = useLiveQuery(async () => {
+    const ids = product.candidate_product_ids || []
+    if (ids.length === 0) return []
+
+    const prods = await Promise.all(ids.map(id => db.products.get(id)))
+    const valid = prods.filter((p): p is Product => p != null)
+
+    // Enrich with supplier name
+    const allMeetings = await db.meetings.toArray()
+    const allSuppliers = await db.suppliers.toArray()
+    const meetingMap = new Map(allMeetings.map(m => [m.id, m]))
+    const supplierMap = new Map(allSuppliers.map(s => [s.id, s]))
+
+    return valid.map(p => {
+      const meeting = meetingMap.get(p.meeting_id)
+      const supplier = meeting ? supplierMap.get(meeting.supplier_id) : undefined
+      return { ...p, supplierName: supplier?.name || '—', supplierStand: supplier?.stand || '—' }
+    })
+  }, [product.candidate_product_ids])
+
+  // Search available captured products (not yet linked)
+  const searchResults = useLiveQuery(async () => {
+    if (!showCandidateSearch || !candidateSearch.trim()) return []
+    const q = normalize(candidateSearch)
+    const linkedIds = new Set(product.candidate_product_ids || [])
+
+    const allProducts = await db.products.toArray()
+    const allMeetings = await db.meetings.toArray()
+    const allSuppliers = await db.suppliers.toArray()
+    const meetingMap = new Map(allMeetings.map(m => [m.id, m]))
+    const supplierMap = new Map(allSuppliers.map(s => [s.id, s]))
+
+    return allProducts
+      .filter(p => !linkedIds.has(p.id))
+      .map(p => {
+        const meeting = meetingMap.get(p.meeting_id)
+        const supplier = meeting ? supplierMap.get(meeting.supplier_id) : undefined
+        return { ...p, supplierName: supplier?.name || '—', supplierStand: supplier?.stand || '—' }
+      })
+      .filter(p =>
+        normalize(p.supplierName).includes(q) ||
+        normalize(p.product_type).includes(q) ||
+        normalize(p.item_model).includes(q) ||
+        normalize(p.features).includes(q)
+      )
+      .slice(0, 10)
+  }, [showCandidateSearch, candidateSearch, product.candidate_product_ids])
+
+  async function addCandidate(productId: string) {
+    const current = product.candidate_product_ids || []
+    if (current.includes(productId)) return
+    const updated = [...current, productId]
+    await db.searched_products.update(product.id, {
+      candidate_product_ids: updated,
+      updated_at: new Date().toISOString(),
+    })
+    // Update local product object for reactivity
+    product.candidate_product_ids = updated
+    setCandidateSearch('')
+  }
+
+  async function removeCandidate(productId: string) {
+    const current = product.candidate_product_ids || []
+    const updated = current.filter(id => id !== productId)
+    await db.searched_products.update(product.id, {
+      candidate_product_ids: updated,
+      updated_at: new Date().toISOString(),
+    })
+    product.candidate_product_ids = updated
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="max-h-[95vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 mx-2" onClick={e => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-800">Ficha de producto buscado</h3>
           <button onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">✕</button>
@@ -478,15 +566,15 @@ function ProductViewModal({
             <ViewField label="Modelo Interno" value={product.model_interno} />
           </div>
 
-          {/* Specs - biggest field */}
+          {/* Specs */}
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">Main Specs</label>
-            <div className="min-h-[80px] whitespace-pre-wrap rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-800">
+            <div className="min-h-[60px] whitespace-pre-wrap rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-800">
               {product.main_specs || '—'}
             </div>
           </div>
 
-          {/* Target Cost - highlighted, right after specs */}
+          {/* Target Cost */}
           <div className="rounded-xl border-2 border-green-300 bg-green-50 p-4 text-center">
             <label className="block text-xs font-medium text-green-700">TARGET COMPRA USD</label>
             <p className="mt-1 text-2xl font-bold text-green-800">
@@ -510,6 +598,158 @@ function ProductViewModal({
             </div>
           )}
 
+          {/* ══════ CANDIDATES SECTION ══════ */}
+          <div className="rounded-xl border-2 border-blue-200 bg-blue-50/50 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-sm font-bold text-blue-800">
+                Candidatos encontrados ({candidates?.length || 0})
+              </h4>
+              <button
+                onClick={() => setShowCandidateSearch(!showCandidateSearch)}
+                className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+              >
+                {showCandidateSearch ? 'Cerrar búsqueda' : '+ Buscar candidato'}
+              </button>
+            </div>
+
+            {/* Search bar for adding candidates */}
+            {showCandidateSearch && (
+              <div className="mb-3">
+                <input
+                  type="text"
+                  placeholder="Buscar por proveedor, tipo, modelo, features..."
+                  value={candidateSearch}
+                  onChange={e => setCandidateSearch(e.target.value)}
+                  autoFocus
+                  className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                {candidateSearch.trim() && searchResults && searchResults.length > 0 && (
+                  <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+                    {searchResults.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => addCandidate(p.id)}
+                        className="flex w-full items-center gap-3 border-b border-gray-100 px-3 py-2 text-left text-xs hover:bg-blue-50"
+                      >
+                        {p.photos?.[0] && (
+                          <img src={p.photos[0]} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-800 truncate">
+                            {p.product_type} — {p.item_model || '?'}
+                          </p>
+                          <p className="text-gray-500 truncate">
+                            {p.supplierName} · {p.price != null ? `$${p.price}` : '—'} · {p.features || ''}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                          + Añadir
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {candidateSearch.trim() && searchResults && searchResults.length === 0 && (
+                  <p className="mt-2 text-center text-xs text-gray-400">Sin resultados para "{candidateSearch}"</p>
+                )}
+              </div>
+            )}
+
+            {/* Linked candidates list */}
+            {candidates && candidates.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {candidates.map((c, idx) => {
+                  const priceDiff = computed && c.price ? c.price - computed : null
+                  const priceOk = priceDiff !== null && priceDiff <= 0
+                  return (
+                    <div key={c.id} className="rounded-lg border border-gray-200 bg-white p-3">
+                      <div className="flex items-start gap-3">
+                        {/* Photo thumbnail */}
+                        {c.photos?.[0] ? (
+                          <img
+                            src={c.photos[0]}
+                            alt=""
+                            className="h-16 w-16 shrink-0 cursor-pointer rounded-lg object-cover border border-gray-200"
+                            onClick={() => setEnlargedPhoto(c.photos[0])}
+                          />
+                        ) : (
+                          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-300 text-xs">
+                            Sin foto
+                          </div>
+                        )}
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                              #{idx + 1}
+                            </span>
+                            <p className="text-sm font-bold text-gray-800 truncate">
+                              {c.product_type} — {c.item_model || '?'}
+                            </p>
+                          </div>
+                          <p className="mt-0.5 text-xs text-gray-500">
+                            {c.supplierName} · Stand {c.supplierStand}
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                            <span className={`font-bold ${priceOk ? 'text-green-700' : priceDiff !== null ? 'text-red-600' : 'text-gray-600'}`}>
+                              Precio: {c.price != null ? `$${c.price.toFixed(2)}` : '—'}
+                              {priceDiff !== null && (
+                                <span className="ml-1 font-normal">
+                                  ({priceDiff > 0 ? '+' : ''}{priceDiff.toFixed(2)} vs target)
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-gray-500">MOQ: {c.moq || '—'}</span>
+                            <span className={`font-medium ${
+                              c.status === 'selected' ? 'text-green-600' :
+                              c.status === 'discarded' ? 'text-red-500' : 'text-orange-600'
+                            }`}>
+                              {c.status === 'selected' ? 'SELECCIONADO' :
+                               c.status === 'discarded' ? 'DESCARTADO' : 'INTERESANTE'}
+                            </span>
+                          </div>
+                          {c.features && (
+                            <p className="mt-0.5 text-[11px] text-gray-400 truncate">{c.features}</p>
+                          )}
+                        </div>
+
+                        {/* Remove button */}
+                        <button
+                          onClick={() => removeCandidate(c.id)}
+                          className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                          title="Desvincular candidato"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {/* Additional photos */}
+                      {c.photos && c.photos.length > 1 && (
+                        <div className="mt-2 flex gap-1.5 overflow-x-auto">
+                          {c.photos.slice(1).map((url, i) => (
+                            <img
+                              key={i}
+                              src={url}
+                              alt={`Foto ${i + 2}`}
+                              className="h-12 w-12 shrink-0 cursor-pointer rounded object-cover border border-gray-200"
+                              onClick={() => setEnlargedPhoto(url)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-center text-xs text-blue-400">
+                Sin candidatos vinculados. Pulsa "Buscar candidato" para añadir productos encontrados en la feria.
+              </p>
+            )}
+          </div>
+
           {/* Actions */}
           <div className="flex gap-3">
             <button onClick={onClose}
@@ -523,6 +763,13 @@ function ProductViewModal({
           </div>
         </div>
       </div>
+
+      {/* Enlarged Photo */}
+      {enlargedPhoto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80" onClick={(e) => { e.stopPropagation(); setEnlargedPhoto(null) }}>
+          <img src={enlargedPhoto} alt="Foto ampliada" className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain" />
+        </div>
+      )}
     </div>
   )
 }
