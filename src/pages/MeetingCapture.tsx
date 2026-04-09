@@ -46,12 +46,16 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
 
   useEffect(() => {
     if (supplier && !contactsInitialized) {
-      setContactName(supplier.assigned_person || '')
+      setContactName(supplier.contact_person || supplier.assigned_person || '')
       setContactEmail(supplier.emails.join(', ') || '')
       setContactPhone(supplier.phone || '')
+      // Pre-fill urgent notes from supplier pending_topics if meeting notes are empty
+      if (meeting && !meeting.urgent_notes && supplier.pending_topics) {
+        setUrgentNotes(supplier.pending_topics)
+      }
       setContactsInitialized(true)
     }
-  }, [supplier, contactsInitialized])
+  }, [supplier, contactsInitialized, meeting])
 
   const autoSave = useCallback(async () => {
     if (!id) return
