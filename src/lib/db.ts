@@ -30,6 +30,7 @@ export class FairDB extends Dexie {
       searched_products: 'id, brand, product_type, ref_segment, updated_at, synced_at',
     })
     this.version(6).stores({})
+    this.version(7).stores({})
   }
 }
 

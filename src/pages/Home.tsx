@@ -7,6 +7,7 @@ import { db } from '@/lib/db'
 import { useSync } from '@/hooks/useSync'
 import { formatDate, formatTime } from '@/lib/format'
 import { normalize } from '@/lib/normalize'
+import { USERS } from '@/lib/constants'
 import type { UserName, Relevance } from '@/types'
 
 interface Props {
@@ -281,6 +282,7 @@ function NewSupplierModal({
   const [name, setName] = useState('')
   const [stand, setStand] = useState('')
   const [productType, setProductType] = useState('')
+  const [contactName, setContactName] = useState('')
   const [emails, setEmails] = useState('')
   const [phone, setPhone] = useState('')
   const [assignedPerson, setAssignedPerson] = useState('')
@@ -298,7 +300,8 @@ function NewSupplierModal({
       id,
       name: name.trim(),
       stand: stand.trim(),
-      assigned_person: assignedPerson.trim() || currentUser,
+      assigned_person: assignedPerson.trim(),
+      contact_person: contactName.trim(),
       product_type: productType.trim(),
       emails: emails.split(',').map(e => e.trim()).filter(Boolean),
       phone: phone.trim(),
@@ -331,44 +334,53 @@ function NewSupplierModal({
         </div>
         <div className="flex flex-col gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Nombre *</label>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Nombre del proveedor *</label>
             <input type="text" value={name} onChange={e => setName(e.target.value)} className={fieldCls} placeholder="Shenzhen Tech Co." autoFocus />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Stand</label>
-              <input type="text" value={stand} onChange={e => setStand(e.target.value)} className={fieldCls} placeholder="3F-A12" />
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-medium text-gray-500">Tipo de productos</label>
               <input type="text" value={productType} onChange={e => setProductType(e.target.value)} className={fieldCls} placeholder="LED, cables..." />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Stand</label>
+              <input type="text" value={stand} onChange={e => setStand(e.target.value)} className={fieldCls} placeholder="3F-A12" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Persona asignada</label>
-              <input type="text" value={assignedPerson} onChange={e => setAssignedPerson(e.target.value)} className={fieldCls} placeholder={currentUser} />
+              <label className="mb-1 block text-xs font-medium text-gray-500">Contacto (Nombre)</label>
+              <input type="text" value={contactName} onChange={e => setContactName(e.target.value)} className={fieldCls} placeholder="Mr. Wang" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Relevancia</label>
-              <div className="flex gap-2">
-                {([1, 2, 3] as const).map(r => (
-                  <button key={r} type="button" onClick={() => setRelevance(r)}
-                    className={`flex-1 rounded-lg py-2.5 text-sm font-bold ${relevance === r
-                      ? r === 1 ? 'bg-red-500 text-white' : r === 2 ? 'bg-yellow-400 text-white' : 'bg-gray-400 text-white'
-                      : 'bg-gray-100 text-gray-400'
-                    }`}>{r}</button>
-                ))}
-              </div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Teléfono</label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className={fieldCls} placeholder="+86 ..." />
             </div>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">Email(s) — separados por coma</label>
             <input type="text" value={emails} onChange={e => setEmails(e.target.value)} className={fieldCls} placeholder="sales@company.com" />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Teléfono</label>
-            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className={fieldCls} placeholder="+86 ..." />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Persona asignada</label>
+              <select value={assignedPerson} onChange={e => setAssignedPerson(e.target.value)} className={fieldCls}>
+                <option value="">— Sin asignar —</option>
+                {USERS.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Relevancia</label>
+              <div className="flex gap-1">
+                {([1, 2, 3] as const).map(r => (
+                  <button key={r} type="button" onClick={() => setRelevance(r)}
+                    className={`flex-1 rounded-lg py-2 text-[10px] font-bold leading-tight ${relevance === r
+                      ? r === 1 ? 'bg-red-500 text-white' : r === 2 ? 'bg-yellow-400 text-white' : 'bg-gray-400 text-white'
+                      : 'bg-gray-100 text-gray-400'
+                    }`}>{r === 1 ? 'IMPRESCINDIBLE' : r === 2 ? 'IMPORTANTE' : 'OPCIONAL'}</button>
+                ))}
+              </div>
+            </div>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">Temas pendientes <span className="font-normal text-gray-400">— incidencias o temas a tratar</span></label>
@@ -575,6 +587,8 @@ interface EnrichedSupplier {
   id: string
   name: string
   product_type: string
+  assigned_person: string
+  contact_person: string
   stand: string
   relevance: number
   is_new: boolean
@@ -610,7 +624,9 @@ function SuppliersTable({
     switch (sortCol) {
       case 'name': cmp = a.name.localeCompare(b.name); break
       case 'product_type': cmp = a.product_type.localeCompare(b.product_type); break
+      case 'assigned_person': cmp = a.assigned_person.localeCompare(b.assigned_person); break
       case 'stand': cmp = a.stand.localeCompare(b.stand); break
+      case 'contact_person': cmp = (a.contact_person || '').localeCompare(b.contact_person || ''); break
       case 'relevance': cmp = a.relevance - b.relevance; break
       case 'is_new': cmp = (a.is_new ? 1 : 0) - (b.is_new ? 1 : 0); break
       case 'visited_feria': cmp = (a.visited_feria ? 1 : 0) - (b.visited_feria ? 1 : 0); break
@@ -621,9 +637,11 @@ function SuppliersTable({
 
   const columns: { key: string; label: string; cls?: string }[] = [
     { key: 'name', label: 'Proveedor', cls: 'text-left' },
-    { key: 'product_type', label: 'Tipo', cls: 'text-left' },
+    { key: 'product_type', label: 'Tipo Producto', cls: 'text-left' },
+    { key: 'assigned_person', label: 'Asignado', cls: 'text-left' },
     { key: 'stand', label: 'Stand', cls: 'text-left' },
-    { key: 'relevance', label: 'Rel', cls: 'text-center w-10' },
+    { key: 'contact_person', label: 'Contacto', cls: 'text-left' },
+    { key: 'relevance', label: 'Relevancia', cls: 'text-center' },
     { key: 'is_new', label: 'Nuevo', cls: 'text-center w-14' },
     { key: 'visited_feria', label: 'V.Feria', cls: 'text-center w-16' },
     { key: 'visited_hotel', label: 'V.Hotel', cls: 'text-center w-16' },
@@ -657,14 +675,16 @@ function SuppliersTable({
             >
               <td className="px-3 py-2.5 font-medium text-gray-800">{s.name}</td>
               <td className="px-3 py-2.5 text-gray-500">{s.product_type || '—'}</td>
+              <td className="px-3 py-2.5 text-gray-500">{s.assigned_person || '—'}</td>
               <td className="px-3 py-2.5 text-gray-500">{s.stand || '—'}</td>
+              <td className="px-3 py-2.5 text-gray-500">{s.contact_person || '—'}</td>
               <td className="px-3 py-2.5 text-center">
-                <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
                   s.relevance === 1 ? 'bg-red-100 text-red-700' :
                   s.relevance === 2 ? 'bg-yellow-100 text-yellow-700' :
                   'bg-gray-100 text-gray-500'
                 }`}>
-                  {s.relevance}
+                  {s.relevance === 1 ? 'IMPRESCINDIBLE' : s.relevance === 2 ? 'IMPORTANTE' : 'OPCIONAL'}
                 </span>
               </td>
               <td className="px-3 py-2.5 text-center">{s.is_new ? 'S' : 'N'}</td>

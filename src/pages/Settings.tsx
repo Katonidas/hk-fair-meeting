@@ -86,7 +86,8 @@ export default function Settings({ currentUser }: Props) {
         const emailRaw = get(row, 'email', 'emails', 'correo', 'mail')
         const emails = emailRaw.split(/[,;]/).map(e => e.trim()).filter(Boolean)
         const phone = get(row, 'phone', 'telefono', 'tel', 'movil', 'mobile')
-        const assignedPerson = get(row, 'persona', 'asignado', 'assigned', 'person', 'contacto')
+        const assignedPerson = get(row, 'personaasignada', 'asignado', 'assigned')
+        const contactPerson = get(row, 'contacto', 'contact', 'persona', 'person')
         const productType = get(row, 'tipodeproducto', 'tipoproducto', 'tipo', 'product', 'producto', 'category')
         const relevanceRaw = Number(get(row, 'relevancia', 'relevance', 'prioridad') || '2')
         const relevance: Relevance = ([1, 2, 3].includes(relevanceRaw) ? relevanceRaw : 2) as Relevance
@@ -102,6 +103,7 @@ export default function Settings({ currentUser }: Props) {
           name,
           stand,
           assigned_person: assignedPerson,
+          contact_person: contactPerson,
           product_type: productType,
           emails,
           phone,

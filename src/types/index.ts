@@ -13,6 +13,7 @@ export interface Supplier {
   name: string
   stand: string
   assigned_person: string
+  contact_person: string
   product_type: string
   emails: string[]
   phone: string
