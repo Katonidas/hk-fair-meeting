@@ -591,9 +591,13 @@ function PhotoUpload({
 }) {
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const [uploading, setUploading] = useState(false)
-
   const [error, setError] = useState('')
+  const [showWebcam, setShowWebcam] = useState(false)
+  const [stream, setStream] = useState<MediaStream | null>(null)
+
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -616,6 +620,59 @@ function PhotoUpload({
     }
   }
 
+  async function openWebcam() {
+    setError('')
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } }
+      })
+      setStream(mediaStream)
+      setShowWebcam(true)
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream
+          videoRef.current.play()
+        }
+      }, 100)
+    } catch {
+      setError('No se pudo acceder a la cámara')
+    }
+  }
+
+  function closeWebcam() {
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop())
+      setStream(null)
+    }
+    setShowWebcam(false)
+  }
+
+  async function captureFromWebcam() {
+    if (!videoRef.current) return
+    const video = videoRef.current
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0)
+    closeWebcam()
+    setUploading(true)
+    setError('')
+    try {
+      const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/jpeg', 0.85))
+      if (!blob) { setError('Error al capturar'); return }
+      const file = new File([blob], 'webcam.jpg', { type: 'image/jpeg' })
+      const uploaded = await uploadPhoto(file, folder)
+      if (uploaded) await onUploaded(uploaded)
+      else setError('Error al subir')
+    } catch (err) {
+      setError('Error: ' + (err instanceof Error ? err.message : 'desconocido'))
+    } finally {
+      setUploading(false)
+    }
+  }
+
   if (url) {
     return (
       <div className="relative">
@@ -630,25 +687,43 @@ function PhotoUpload({
 
   return (
     <div className="flex flex-col gap-1">
+      {showWebcam && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80">
+          <video ref={videoRef} autoPlay playsInline muted className="max-h-[60vh] max-w-[90vw] rounded-lg" />
+          <div className="mt-4 flex gap-3">
+            <button onClick={captureFromWebcam} className="rounded-full bg-white px-6 py-3 text-sm font-bold text-gray-800">Capturar</button>
+            <button onClick={closeWebcam} className="rounded-full bg-gray-600 px-6 py-3 text-sm text-white">Cancelar</button>
+          </div>
+        </div>
+      )}
       {uploading ? (
         <div className="flex h-16 items-center justify-center rounded-lg border-2 border-dashed border-gray-200 text-xs text-gray-400">Subiendo...</div>
       ) : (
         <>
-          {/* Camera - capture attribute triggers native camera on mobile */}
-          <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
-          <button
-            onClick={() => cameraRef.current?.click()}
-            className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            Hacer foto
-          </button>
-          {/* File picker - no capture, opens gallery/file browser */}
+          {isMobile ? (
+            <>
+              {/* Mobile: capture triggers native camera */}
+              <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
+              <button onClick={() => cameraRef.current?.click()}
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                Hacer foto
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Desktop: open webcam via getUserMedia */}
+              <button onClick={openWebcam}
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                Hacer foto
+              </button>
+            </>
+          )}
+          {/* File picker - works everywhere */}
           <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.webp" onChange={handleFile} className="hidden" />
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary"
-          >
+          <button onClick={() => fileRef.current?.click()}
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
             Subir archivo
           </button>
