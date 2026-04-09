@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { uploadPhoto, compressImage } from '@/lib/storage'
 import { formatDate, formatTime } from '@/lib/format'
 import type { UserName, Product, SampleStatus, ProductStatus, Supplier } from '@/types'
+import { StatusBadge } from '@/pages/CapturedProducts'
 
 interface Props {
   currentUser: UserName
@@ -340,6 +341,7 @@ function ProductsTable({
               <th className="px-2 py-1.5 text-right font-semibold text-gray-500">MOQ</th>
               <th className="px-2 py-1.5 text-left font-semibold text-gray-500">Features</th>
               <th className="px-2 py-1.5 text-center font-semibold text-gray-500">Sample</th>
+              <th className="px-2 py-1.5 text-center font-semibold text-gray-500">Estado Sample</th>
               <th className="px-2 py-1.5 text-center font-semibold text-gray-500">Estado</th>
             </tr>
           </thead>
@@ -369,10 +371,11 @@ function ProductsTable({
                     </td>
                     <td className="px-2 py-2 text-center text-gray-600">{p.sample_units || '—'}</td>
                     <td className={`px-2 py-2 text-center ${sampleColor}`}>{sampleLabel}</td>
+                    <td className="px-2 py-2 text-center"><StatusBadge status={p.status} /></td>
                   </tr>
                   {isExpanded && (
                     <tr className="border-b border-gray-200 bg-gray-50">
-                      <td colSpan={8} className="px-3 py-3">
+                      <td colSpan={9} className="px-3 py-3">
                         <div className="space-y-2 text-xs text-gray-500">
                           {p.options && <p><span className="font-medium text-gray-700">Options:</span> {p.options}</p>}
                           {p.observations && <p><span className="font-medium text-gray-700">Notas:</span> {p.observations}</p>}
@@ -409,7 +412,7 @@ function ProductsTable({
 
       {/* Image viewer */}
       {viewImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setViewImage(null)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80" onClick={() => setViewImage(null)}>
           <img src={viewImage} alt="Foto ampliada" className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain" />
           <button onClick={() => setViewImage(null)} className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/40">✕</button>
         </div>

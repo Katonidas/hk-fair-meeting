@@ -186,7 +186,7 @@ export default function CapturedProducts() {
                   <th className={`${thBase} text-left`} onClick={() => handleSort('features')}>Features{arrow('features')}</th>
                   <th className={`${thBase} text-right`} onClick={() => handleSort('moq')}>MOQ{arrow('moq')}</th>
                   <th className={`${thBase} text-left`} onClick={() => handleSort('options')}>Options{arrow('options')}</th>
-                  <th className={`${thBase} text-center`} onClick={() => handleSort('sample_status')}>Sample{arrow('sample_status')}</th>
+                  <th className={`${thBase} text-center`} onClick={() => handleSort('sample_status')}>Estado Sample{arrow('sample_status')}</th>
                   <th className={`${thBase} text-center`} onClick={() => handleSort('status')}>Estado{arrow('status')}</th>
                 </tr>
               </thead>
@@ -242,7 +242,7 @@ export default function CapturedProducts() {
       {/* Enlarged Photo */}
       {enlargedPhoto && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80"
           onClick={() => setEnlargedPhoto(null)}
         >
           <img src={enlargedPhoto} alt="Enlarged" className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain" />

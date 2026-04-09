@@ -379,7 +379,7 @@ export default function SupplierDetail({ currentUser }: Props) {
 
       {/* Enlarged Photo */}
       {enlargedPhoto && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80" onClick={() => setEnlargedPhoto(null)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80" onClick={() => setEnlargedPhoto(null)}>
           <img src={enlargedPhoto} alt="Enlarged" className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain" />
         </div>
       )}
