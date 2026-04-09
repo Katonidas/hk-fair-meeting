@@ -29,9 +29,9 @@ export default function App() {
         <Route path="/supplier/:id" element={<SupplierDetail currentUser={currentUser} />} />
         <Route path="/searched-products" element={<SearchedProducts />} />
         <Route path="/captured-products" element={<CapturedProducts />} />
-        <Route path="/route-planner" element={<RoutePlanner />} />
         <Route path="/settings" element={<Settings currentUser={currentUser} />} />
       </Route>
+      <Route path="/route-planner" element={<RoutePlanner />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

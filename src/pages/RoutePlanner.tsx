@@ -427,7 +427,7 @@ export default function RoutePlanner() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-gray-500">Posicion actual</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Posición actual</label>
               <input
                 type="text"
                 value={currentPosition}
@@ -443,7 +443,7 @@ export default function RoutePlanner() {
                 onChange={e => { setPriorityMode(e.target.value as 'auto' | 'relevance' | 'potential'); setOptimizedRoute(null) }}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                <option value="auto">Automatico</option>
+                <option value="auto">Automático</option>
                 <option value="relevance">Importancia proveedor</option>
                 <option value="potential">Productos potenciales</option>
               </select>
