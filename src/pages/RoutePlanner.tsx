@@ -420,6 +420,14 @@ export default function RoutePlanner() {
         </span>
       </div>
 
+      {/* Legend */}
+      <div className="flex items-center gap-4 px-4 pb-2 text-[11px]">
+        <span className="font-medium text-gray-500">Relevancia:</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full bg-red-100 border border-red-300"></span> <span className="text-red-700 font-bold">IMPRESCINDIBLE</span></span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full bg-yellow-100 border border-yellow-300"></span> <span className="text-yellow-700 font-bold">IMPORTANTE</span></span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full bg-gray-100 border border-gray-300"></span> <span className="text-gray-500 font-bold">OPCIONAL</span></span>
+      </div>
+
       {/* Two-panel layout */}
       <div className="flex flex-col gap-4 px-4 pb-8 lg:flex-row">
         {/* Visited panel */}
@@ -441,10 +449,16 @@ export default function RoutePlanner() {
               <tbody className="divide-y divide-gray-50">
                 {displayVisited.length === 0 ? (
                   <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">Sin proveedores visitados</td></tr>
-                ) : displayVisited.map(e => (
+                ) : displayVisited.map(e => {
+                  const relevanceBgV = e.supplier.relevance === 1
+                    ? 'bg-red-50 border-l-4 border-l-red-400'
+                    : e.supplier.relevance === 2
+                      ? 'bg-yellow-50 border-l-4 border-l-yellow-400'
+                      : 'bg-gray-50/50 border-l-4 border-l-gray-200'
+                  return (
                   <tr
                     key={e.supplier.id}
-                    className="cursor-pointer hover:bg-gray-50"
+                    className={`cursor-pointer hover:bg-blue-50 ${relevanceBgV}`}
                     onClick={() => navigate(`/supplier/${e.supplier.id}`)}
                   >
                     <td className="px-3 py-2 font-medium text-gray-800">{e.supplier.name}</td>
@@ -453,7 +467,8 @@ export default function RoutePlanner() {
                     <td className="px-3 py-2 text-center text-gray-500">{e.potentialCount}</td>
                     <td className="px-3 py-2 text-center text-gray-500">{e.foundCount}</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -485,14 +500,14 @@ export default function RoutePlanner() {
                   <tr><td colSpan={optimizedRoute ? 5 : 4} className="px-4 py-6 text-center text-gray-400">Sin proveedores pendientes</td></tr>
                 ) : displayPending.map((e, idx) => {
                   const relevanceBg = e.supplier.relevance === 1
-                    ? 'bg-green-50 border-l-4 border-l-green-400'
+                    ? 'bg-red-50 border-l-4 border-l-red-400'
                     : e.supplier.relevance === 2
                       ? 'bg-yellow-50 border-l-4 border-l-yellow-400'
-                      : ''
+                      : 'bg-gray-50/50 border-l-4 border-l-gray-200'
                   return (
                     <tr
                       key={e.supplier.id}
-                      className={`cursor-pointer hover:bg-gray-50 ${relevanceBg}`}
+                      className={`cursor-pointer hover:bg-blue-50 ${relevanceBg}`}
                       onClick={() => navigate(`/supplier/${e.supplier.id}`)}
                     >
                       {optimizedRoute && (
