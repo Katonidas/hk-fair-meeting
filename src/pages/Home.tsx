@@ -494,20 +494,20 @@ function MeetingsList({
   })
 
   const arrow = (col: string) => sortCol === col ? (sortAsc ? ' ↑' : ' ↓') : ''
-  const thCls = "px-2 py-2 text-left font-semibold text-gray-500 cursor-pointer whitespace-nowrap hover:text-primary"
+  const thBase = "px-2 py-2 font-semibold text-gray-500 cursor-pointer whitespace-nowrap hover:text-primary"
 
   return (
     <div className="-mx-4 overflow-x-auto">
       <table className="w-full min-w-[700px] text-xs">
         <thead>
           <tr className="border-b border-gray-200 bg-gray-50">
-            <th className={thCls} onClick={() => onSort('visited_at')}>Fecha{arrow('visited_at')}</th>
-            <th className={`${thCls}`} onClick={() => onSort('visited_at')}>Hora</th>
-            <th className={thCls} onClick={() => onSort('location')}>Lugar{arrow('location')}</th>
-            <th className={thCls} onClick={() => onSort('supplier')}>Proveedor{arrow('supplier')}</th>
-            <th className={thCls} onClick={() => onSort('user_name')}>Persona{arrow('user_name')}</th>
-            <th className={`${thCls} text-center`} onClick={() => onSort('productCount')}>Prod.{arrow('productCount')}</th>
-            <th className={`${thCls} text-center`} onClick={() => onSort('email')}>Email{arrow('email')}</th>
+            <th className={`${thBase} text-left`} onClick={() => onSort('visited_at')}>Fecha{arrow('visited_at')}</th>
+            <th className={`${thBase} text-left`} onClick={() => onSort('visited_at')}>Hora</th>
+            <th className={`${thBase} text-left`} onClick={() => onSort('location')}>Lugar{arrow('location')}</th>
+            <th className={`${thBase} text-left`} onClick={() => onSort('supplier')}>Proveedor{arrow('supplier')}</th>
+            <th className={`${thBase} text-left`} onClick={() => onSort('user_name')}>Persona{arrow('user_name')}</th>
+            <th className={`${thBase} text-center`} onClick={() => onSort('productCount')}>Prod.{arrow('productCount')}</th>
+            <th className={`${thBase} text-center`} onClick={() => onSort('email')}>Email{arrow('email')}</th>
             <th className="px-2 py-2 text-center font-semibold text-gray-500 w-10"></th>
           </tr>
         </thead>

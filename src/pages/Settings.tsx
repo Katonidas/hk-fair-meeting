@@ -52,13 +52,14 @@ export default function Settings({ currentUser }: Props) {
 
       const cols = Object.keys(rows[0])
 
-      // Flexible column matcher (accent/case insensitive, partial match)
+      // Flexible column matcher
       const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
       const get = (row: Record<string, unknown>, ...keys: string[]) => {
         const normKeys = keys.map(norm)
         for (const col of Object.keys(row)) {
           const normCol = norm(col)
-          if (normKeys.some(nk => normCol === nk || normCol.includes(nk) || nk.includes(normCol))) {
+          // Match if normalized column contains any key or key contains column (min 3 chars to avoid false matches)
+          if (normKeys.some(nk => normCol === nk || (nk.length >= 3 && normCol.includes(nk)) || (normCol.length >= 3 && nk.includes(normCol)))) {
             if (row[col] !== undefined && row[col] !== null && row[col] !== '') return String(row[col]).trim()
           }
         }
@@ -70,7 +71,15 @@ export default function Settings({ currentUser }: Props) {
       const now = new Date().toISOString()
 
       for (const row of rows) {
-        const name = get(row, 'nombre', 'name', 'supplier', 'proveedor', 'empresa', 'company')
+        // Try to find name from multiple possible column names
+        let name = get(row, 'nombre', 'name', 'supplier', 'proveedor', 'empresa', 'company')
+        // Fallback: if no name found, try the first column value
+        if (!name) {
+          const firstCol = Object.keys(row)[0]
+          if (firstCol && row[firstCol] !== undefined && row[firstCol] !== null && row[firstCol] !== '') {
+            name = String(row[firstCol]).trim()
+          }
+        }
         if (!name) { skipped++; continue }
 
         const stand = get(row, 'stand', 'booth', 'ubicacion')
