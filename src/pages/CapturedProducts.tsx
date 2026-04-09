@@ -7,7 +7,10 @@ import JSZip from 'jszip'
 import { db } from '@/lib/db'
 import { normalize } from '@/lib/normalize'
 import { uploadPhoto, compressImage } from '@/lib/storage'
-import type { ProductStatus, SampleStatus } from '@/types'
+import { buildMailtoUrl } from '@/lib/emailGenerator'
+import { getCCEmails } from '@/lib/constants'
+import { translateAndCorrect } from '@/lib/translate'
+import type { ProductStatus, SampleStatus, UserName } from '@/types'
 
 type SortCol = 'supplierName' | 'supplierStand' | 'product_type' | 'item_model' | 'price' | 'target_price' | 'features' | 'moq' | 'options' | 'sample_status' | 'status'
 
@@ -401,6 +404,7 @@ export function ProductDetailModal({
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [showWebcam, setShowWebcam] = useState(false)
   const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null)
+  const [showEmailModal, setShowEmailModal] = useState(false)
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -738,6 +742,14 @@ export function ProductDetailModal({
             )}
           </div>
 
+          {/* Send email button */}
+          <button
+            onClick={() => setShowEmailModal(true)}
+            className="w-full rounded-xl bg-primary py-3 text-sm font-bold text-white hover:bg-primary-light"
+          >
+            Enviar email al proveedor
+          </button>
+
           {/* Delete button */}
           <button
             onClick={async () => {
@@ -750,6 +762,14 @@ export function ProductDetailModal({
           >
             Eliminar producto
           </button>
+
+          {/* Product Email Modal */}
+          {showEmailModal && (
+            <ProductEmailModal
+              product={product}
+              onClose={() => setShowEmailModal(false)}
+            />
+          )}
 
           {/* Back button */}
           <button
@@ -769,6 +789,148 @@ function DetailField({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-xs font-medium text-gray-500">{label}</p>
       <p className="text-sm text-gray-800 whitespace-pre-wrap">{value || '—'}</p>
+    </div>
+  )
+}
+
+function ProductEmailModal({
+  product,
+  onClose,
+}: {
+  product: EnrichedProduct
+  onClose: () => void
+}) {
+  const [freeText, setFreeText] = useState('')
+  const [translating, setTranslating] = useState(false)
+  const [supplierEmail, setSupplierEmail] = useState<string[]>([])
+
+  // Look up supplier email
+  const supplier = useLiveQuery(async () => {
+    // Try direct supplier_id first
+    const prod = await db.products.get(product.id)
+    if (prod?.supplier_id) {
+      const s = await db.suppliers.get(prod.supplier_id)
+      if (s) return s
+    }
+    // Try via meeting
+    const meeting = await db.meetings.get(product.meeting_id)
+    if (meeting) {
+      return db.suppliers.get(meeting.supplier_id)
+    }
+    return undefined
+  }, [product.meeting_id, product.id])
+
+  // Set supplier email when loaded
+  if (supplier?.emails?.length && supplierEmail.length === 0) {
+    setSupplierEmail(supplier.emails)
+  }
+
+  const toEmails = supplier?.emails?.length ? supplier.emails : supplierEmail
+
+  function buildBody() {
+    const lines: string[] = []
+    lines.push('Hello,')
+    lines.push('')
+    lines.push("I'm writing in reference to this product:")
+    lines.push('')
+    lines.push(`  PRODUCT TYPE: ${product.product_type || '—'}`)
+    lines.push(`  ITEM/MODEL: ${product.item_model || '—'}`)
+    lines.push(`  PRICE: ${product.price != null ? `$${product.price}` : '—'}`)
+    lines.push(`  MOQ: ${product.moq || '—'}`)
+    lines.push(`  FEATURES: ${product.features || '—'}`)
+    lines.push(`  OPTIONS: ${product.options || '—'}`)
+    lines.push('')
+    if (freeText.trim()) {
+      lines.push(freeText.trim())
+      lines.push('')
+    }
+    lines.push('Best regards,')
+    lines.push('APPROX Team')
+    return lines.join('\n')
+  }
+
+  async function handleTranslate() {
+    setTranslating(true)
+    try {
+      const translated = await translateAndCorrect(freeText)
+      setFreeText(translated)
+    } catch {
+      alert('Error al traducir. Comprueba tu conexión.')
+    } finally {
+      setTranslating(false)
+    }
+  }
+
+  function handleSend() {
+    const subject = product.item_model || product.product_type || 'Product inquiry'
+    const body = buildBody()
+    // Get current user from localStorage or default
+    const currentUser = (localStorage.getItem('hk-fair-user') || 'Jesús') as UserName
+    const cc = getCCEmails(currentUser)
+    const url = buildMailtoUrl(toEmails, cc, subject, body)
+    window.open(url, '_blank')
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 mx-2"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-800">Email del producto</h3>
+          <button onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">&#10005;</button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <p className="text-xs font-medium text-gray-500">TO</p>
+            <p className="text-sm text-gray-800">{toEmails.join(', ') || 'Sin email de proveedor'}</p>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium text-gray-500">Subject</p>
+            <p className="text-sm text-gray-800">{product.item_model || product.product_type || 'Product inquiry'}</p>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 p-3 text-xs text-gray-600 whitespace-pre-wrap font-mono">
+            {buildBody()}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Texto adicional (se inserta antes de la despedida)</label>
+            <textarea
+              value={freeText}
+              onChange={e => setFreeText(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+              placeholder="Escribe aquí cualquier mensaje adicional..."
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            >
+              Guardar borrador
+            </button>
+            <button
+              onClick={handleTranslate}
+              disabled={translating}
+              className="flex-1 rounded-xl border border-blue-200 bg-blue-50 py-3 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+            >
+              {translating ? 'Traduciendo...' : 'TRADUCIR / CORREGIR'}
+            </button>
+            <button
+              onClick={handleSend}
+              className="flex-1 rounded-xl bg-primary py-3 text-sm font-bold text-white hover:bg-primary-light"
+            >
+              ENVIAR EMAIL
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

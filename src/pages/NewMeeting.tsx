@@ -4,7 +4,9 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
 import { normalize } from '@/lib/normalize'
+import { getMatchingSearchedProducts } from '@/lib/matching'
 import type { UserName, Supplier, MeetingLocation } from '@/types'
+import type { SearchedProduct } from '@/types/searchedProduct'
 
 function getLocalDatetime() {
   const d = new Date()
@@ -57,6 +59,11 @@ export default function NewMeeting({ currentUser }: Props) {
   }
 
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
+
+  const suggestedProducts = useLiveQuery(async () => {
+    if (!selectedSupplier) return [] as SearchedProduct[]
+    return getMatchingSearchedProducts(selectedSupplier.id)
+  }, [selectedSupplier?.id])
 
   async function handleConfirmSupplier() {
     if (selectedSupplier) await createMeetingForSupplier(selectedSupplier.id)
@@ -154,6 +161,28 @@ export default function NewMeeting({ currentUser }: Props) {
               >
                 INICIAR REUNIÓN
               </button>
+
+              {/* Suggested products */}
+              {suggestedProducts && suggestedProducts.length > 0 && (
+                <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+                  <h3 className="mb-2 text-xs font-semibold text-purple-700">
+                    Productos buscados que coinciden ({suggestedProducts.length})
+                  </h3>
+                  <div className="flex flex-col gap-2">
+                    {suggestedProducts.map(sp => (
+                      <div key={sp.id} className="rounded-lg bg-white p-3 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-gray-800">{sp.brand} — {sp.product_type}</span>
+                          {sp.target_cost != null && <span className="text-purple-600 font-bold">${sp.target_cost}</span>}
+                        </div>
+                        <p className="mt-1 text-gray-500 truncate">
+                          {sp.main_specs ? sp.main_specs.substring(0, 80) + (sp.main_specs.length > 80 ? '...' : '') : 'Sin specs'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col gap-2">

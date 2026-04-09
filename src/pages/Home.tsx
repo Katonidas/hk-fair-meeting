@@ -9,6 +9,7 @@ import { formatDate, formatTime } from '@/lib/format'
 import { normalize } from '@/lib/normalize'
 import { USERS } from '@/lib/constants'
 import type { UserName, Relevance } from '@/types'
+import type { SearchedProduct } from '@/types/searchedProduct'
 
 interface Props {
   currentUser: UserName
@@ -52,15 +53,30 @@ export default function Home({ currentUser }: Props) {
   const suppliers = useLiveQuery(async () => {
     const all = await db.suppliers.toArray()
     const allMeetings = await db.meetings.toArray()
-
     const allProducts = await db.products.toArray()
+    const allSearchedProducts: SearchedProduct[] = await db.searched_products.toArray()
+
     const enriched = all.map(s => {
       const sMeetings = allMeetings.filter(m => m.supplier_id === s.id)
       const meetingIds = new Set(sMeetings.map(m => m.id))
       const productCount = allProducts.filter(p => meetingIds.has(p.meeting_id)).length
+
+      // Calculate potential products count (matching searched products)
+      const supplierTypes = normalize(s.product_type || '')
+        .split(/[,;/]+/)
+        .map(t => t.trim())
+        .filter(t => t.length > 2)
+      const potentialProductCount = allSearchedProducts.filter(sp => {
+        if (sp.candidate_supplier_ids?.includes(s.id)) return true
+        if (supplierTypes.length === 0) return false
+        const spType = normalize(sp.product_type)
+        return supplierTypes.some(st => spType.includes(st) || st.includes(spType))
+      }).length
+
       return {
         ...s,
         productCount,
+        potentialProductCount,
         visited_feria: sMeetings.some(m => m.location === 'feria'),
         visited_hotel: sMeetings.some(m => m.location === 'hotel'),
       }
@@ -536,6 +552,7 @@ interface EnrichedSupplier {
   contact_person: string
   stand: string
   productCount: number
+  potentialProductCount: number
   relevance: number
   is_new: boolean
   visited_feria: boolean
@@ -574,6 +591,7 @@ function SuppliersTable({
       case 'stand': cmp = a.stand.localeCompare(b.stand); break
       case 'contact_person': cmp = (a.contact_person || '').localeCompare(b.contact_person || ''); break
       case 'productCount': cmp = a.productCount - b.productCount; break
+      case 'potentialProductCount': cmp = a.potentialProductCount - b.potentialProductCount; break
       case 'relevance': cmp = a.relevance - b.relevance; break
       case 'is_new': cmp = (a.is_new ? 1 : 0) - (b.is_new ? 1 : 0); break
       case 'visited_feria': cmp = (a.visited_feria ? 1 : 0) - (b.visited_feria ? 1 : 0); break
@@ -588,7 +606,8 @@ function SuppliersTable({
     { key: 'assigned_person', label: 'Asignado', cls: 'text-left' },
     { key: 'stand', label: 'Stand', cls: 'text-left' },
     { key: 'contact_person', label: 'Contacto', cls: 'text-left' },
-    { key: 'productCount', label: 'Prod.', cls: 'text-center w-14' },
+    { key: 'productCount', label: 'Prod. Sel.', cls: 'text-center w-16' },
+    { key: 'potentialProductCount', label: 'Prod. Pos.', cls: 'text-center w-16' },
     { key: 'relevance', label: 'Relevancia', cls: 'text-center' },
     { key: 'is_new', label: 'Nuevo', cls: 'text-center w-14' },
     { key: 'visited_feria', label: 'V.Feria', cls: 'text-center w-16' },
@@ -627,6 +646,7 @@ function SuppliersTable({
               <td className="px-3 py-2.5 text-gray-500">{s.stand || '—'}</td>
               <td className="px-3 py-2.5 text-gray-500">{s.contact_person || '—'}</td>
               <td className="px-3 py-2.5 text-center text-gray-600">{s.productCount}</td>
+              <td className="px-3 py-2.5 text-center text-purple-600">{s.potentialProductCount || '—'}</td>
               <td className="px-3 py-2.5 text-center">
                 <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
                   s.relevance === 1 ? 'bg-red-100 text-red-700' :

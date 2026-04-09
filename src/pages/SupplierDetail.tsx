@@ -4,9 +4,12 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
 import { formatDate, formatTime } from '@/lib/format'
-import { normalize } from '@/lib/normalize'
-import { USERS } from '@/lib/constants'
+import { USERS, getCCEmails } from '@/lib/constants'
+import { getMatchingSearchedProducts } from '@/lib/matching'
+import { buildMailtoUrl } from '@/lib/emailGenerator'
+import { getTerms } from '@/lib/settings'
 import type { UserName, Relevance, ProductStatus, SampleStatus } from '@/types'
+import type { SearchedProduct } from '@/types/searchedProduct'
 import { StatusBadge, ProductDetailModal } from '@/pages/CapturedProducts'
 import type { EnrichedProduct } from '@/pages/CapturedProducts'
 
@@ -33,15 +36,9 @@ export default function SupplierDetail({ currentUser }: Props) {
   }, [id])
 
   const matchingSearchedProducts = useLiveQuery(async () => {
-    if (!supplier?.product_type) return []
-    const supplierTypes = normalize(supplier.product_type).split(/[,;/]/).map(t => t.trim()).filter(Boolean)
-    if (supplierTypes.length === 0) return []
-    const all = await db.searched_products.toArray()
-    return all.filter(sp => {
-      const spType = normalize(sp.product_type)
-      return supplierTypes.some(st => spType.includes(st) || st.includes(spType))
-    })
-  }, [supplier?.product_type])
+    if (!id) return [] as SearchedProduct[]
+    return getMatchingSearchedProducts(id)
+  }, [id])
 
   const supplierProducts = useLiveQuery(async () => {
     if (!id) return []
@@ -330,6 +327,67 @@ export default function SupplierDetail({ currentUser }: Props) {
             setSelectedProduct(enriched)
           }}
         />
+
+        {/* Productos Potenciales */}
+        {matchingSearchedProducts && matchingSearchedProducts.length > 0 && (
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-purple-700">
+                Productos Potenciales a encontrar en proveedor ({matchingSearchedProducts.length})
+              </h2>
+              <button
+                onClick={() => {
+                  if (!supplier) return
+                  const terms = getTerms()
+                  const lines: string[] = []
+                  lines.push('Hello,')
+                  lines.push('')
+                  lines.push('We are looking for the following products. To make our meeting more efficient, please have ready the products that you consider may fit both in terms of specifications and price, also taking into account the examples we send regarding shape or design.')
+                  lines.push('')
+                  lines.push('Of course, if you have any alternative, we will be happy to see it. If you want to send us the information by email in advance, that would be great too. Please send us the best possible offer along with images and specifications of the product.')
+                  lines.push('')
+                  lines.push('Please remember that the prices provided must be based on and include our agreed terms and conditions:')
+                  lines.push('')
+                  lines.push(terms)
+                  lines.push('')
+                  lines.push('PRODUCTS WE ARE LOOKING FOR:')
+                  lines.push(String.fromCharCode(9552).repeat(27))
+                  lines.push('')
+                  matchingSearchedProducts.forEach((sp, i) => {
+                    lines.push(`${String.fromCharCode(9472)}${String.fromCharCode(9472)} Product ${i + 1} ${String.fromCharCode(9472)}${String.fromCharCode(9472)}`)
+                    lines.push(`  TYPE: ${sp.product_type || '—'}`)
+                    lines.push(`  SPECS: ${sp.main_specs || '—'}`)
+                    lines.push(`  TARGET PRICE: ${sp.target_cost != null ? `$${sp.target_cost}` : '—'}`)
+                    lines.push(`  EXAMPLES: ${sp.examples || '—'}`)
+                    lines.push('')
+                  })
+                  lines.push('Best regards,')
+                  lines.push('APPROX Team')
+                  const body = lines.join('\n')
+                  const currentUser = (localStorage.getItem('hk-fair-user') || 'Jesús') as UserName
+                  const cc = getCCEmails(currentUser)
+                  const url = buildMailtoUrl(supplier.emails, cc, 'Productos buscados APPROX', body)
+                  window.open(url, '_blank')
+                }}
+                className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-medium text-white hover:bg-purple-700"
+              >
+                Enviar email
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              {matchingSearchedProducts.map(sp => (
+                <div key={sp.id} className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-purple-800">{sp.brand} — {sp.product_type}</span>
+                    {sp.target_cost != null && <span className="text-xs font-bold text-purple-600">${sp.target_cost}</span>}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-600">{sp.main_specs || 'Sin specs'}</p>
+                  {sp.examples && <p className="mt-0.5 text-xs text-gray-400">Ejemplos: {sp.examples}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Product Detail Modal */}

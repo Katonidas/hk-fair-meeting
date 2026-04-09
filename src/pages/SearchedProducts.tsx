@@ -126,6 +126,7 @@ export default function SearchedProducts() {
           pvpr: pvpr ? parseFloat(pvpr.replace(/[^0-9.,]/g, '').replace(',', '.')) || null : null,
           model_interno: modelInterno,
           candidate_product_ids: [],
+          candidate_supplier_ids: [],
           created_at: now,
           updated_at: now,
           synced_at: null,
@@ -385,6 +386,7 @@ function SearchedProductForm({
         id: uuid(),
         ...data,
         candidate_product_ids: [],
+        candidate_supplier_ids: [],
         created_at: now,
         synced_at: null,
       })

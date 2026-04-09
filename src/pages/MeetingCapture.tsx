@@ -5,7 +5,9 @@ import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
 import { uploadPhoto, compressImage } from '@/lib/storage'
 import { formatDate, formatTime } from '@/lib/format'
+import { getMatchingSearchedProducts } from '@/lib/matching'
 import type { UserName, Product, SampleStatus, ProductStatus, Supplier } from '@/types'
+import type { SearchedProduct } from '@/types/searchedProduct'
 import { StatusBadge, ProductDetailModal } from '@/pages/CapturedProducts'
 
 interface Props {
@@ -40,6 +42,12 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
   const [showProductForm, setShowProductForm] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [saved, setSaved] = useState(false)
+  const [showSuggestedProducts, setShowSuggestedProducts] = useState(false)
+
+  const suggestedProducts = useLiveQuery(async () => {
+    if (!meeting?.supplier_id) return [] as SearchedProduct[]
+    return getMatchingSearchedProducts(meeting.supplier_id)
+  }, [meeting?.supplier_id])
 
   useEffect(() => {
     if (meeting) {
@@ -224,14 +232,24 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
             <h2 className="text-sm font-semibold text-gray-700">
               Productos ({products?.length || 0})
             </h2>
-            {isEditable && (
-              <button
-                onClick={() => { setEditingProduct(null); setShowProductForm(true) }}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-light"
-              >
-                + Añadir
-              </button>
-            )}
+            <div className="flex gap-2">
+              {suggestedProducts && suggestedProducts.length > 0 && (
+                <button
+                  onClick={() => setShowSuggestedProducts(true)}
+                  className="rounded-lg border border-purple-300 bg-purple-50 px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-100"
+                >
+                  Ver sugeridos ({suggestedProducts.length})
+                </button>
+              )}
+              {isEditable && (
+                <button
+                  onClick={() => { setEditingProduct(null); setShowProductForm(true) }}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-light"
+                >
+                  + Añadir
+                </button>
+              )}
+            </div>
           </div>
 
           {products && products.length > 0 ? (
@@ -272,6 +290,43 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
           product={editingProduct}
           onClose={() => setShowProductForm(false)}
         />
+      )}
+
+      {/* Suggested Products Modal */}
+      {showSuggestedProducts && suggestedProducts && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowSuggestedProducts(false)}>
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 mx-2"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-800">Productos sugeridos</h3>
+              <button onClick={() => setShowSuggestedProducts(false)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">&#10005;</button>
+            </div>
+            {suggestedProducts.length === 0 ? (
+              <p className="py-8 text-center text-sm text-gray-400">No hay productos sugeridos para este proveedor</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {suggestedProducts.map(sp => (
+                  <div key={sp.id} className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-purple-800">MARCA: {sp.brand || '—'}</span>
+                      {sp.target_cost != null && <span className="text-xs font-bold text-purple-600">TARGET: ${sp.target_cost}</span>}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-700"><span className="font-semibold">TIPO:</span> {sp.product_type}</p>
+                    <p className="mt-1 text-xs text-gray-600"><span className="font-semibold">SPECS:</span> {sp.main_specs || '—'}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => setShowSuggestedProducts(false)}
+              className="mt-4 w-full rounded-xl border border-gray-300 bg-gray-50 py-3 text-sm font-medium text-gray-500 hover:bg-gray-100"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Footer */}
