@@ -5,6 +5,7 @@ import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
 import { formatDate, formatTime } from '@/lib/format'
 import { normalize } from '@/lib/normalize'
+import { USERS } from '@/lib/constants'
 import type { UserName, Relevance } from '@/types'
 
 interface Props {
@@ -46,6 +47,7 @@ export default function SupplierDetail({ currentUser }: Props) {
   const [emails, setEmails] = useState('')
   const [phone, setPhone] = useState('')
   const [assignedPerson, setAssignedPerson] = useState('')
+  const [contactPerson, setContactPerson] = useState('')
   const [productType, setProductType] = useState('')
   const [relevance, setRelevance] = useState<Relevance>(2)
   const [visited, setVisited] = useState(false)
@@ -62,6 +64,7 @@ export default function SupplierDetail({ currentUser }: Props) {
       setEmails(supplier.emails.join(', '))
       setPhone(supplier.phone)
       setAssignedPerson(supplier.assigned_person)
+      setContactPerson(supplier.contact_person || '')
       setProductType(supplier.product_type)
       setRelevance(supplier.relevance)
       setVisited(supplier.visited)
@@ -82,6 +85,7 @@ export default function SupplierDetail({ currentUser }: Props) {
       emails: emails.split(',').map(e => e.trim()).filter(Boolean),
       phone: phone.trim(),
       assigned_person: assignedPerson.trim(),
+      contact_person: contactPerson.trim(),
       product_type: productType.trim(),
       relevance,
       visited,
@@ -158,35 +162,47 @@ export default function SupplierDetail({ currentUser }: Props) {
           {editing ? (
             <div className="flex flex-col gap-3">
               <EditField label="Nombre" value={name} onChange={setName} />
-              <EditField label="Stand" value={stand} onChange={setStand} />
+              <div className="grid grid-cols-2 gap-3">
+                <EditField label="Tipo de producto" value={productType} onChange={setProductType} />
+                <EditField label="Stand" value={stand} onChange={setStand} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <EditField label="Contacto (Nombre)" value={contactPerson} onChange={setContactPerson} />
+                <EditField label="Teléfono" value={phone} onChange={setPhone} />
+              </div>
               <EditField label="Emails (separados por coma)" value={emails} onChange={setEmails} />
-              <EditField label="Teléfono" value={phone} onChange={setPhone} />
-              <EditField label="Persona asignada" value={assignedPerson} onChange={setAssignedPerson} />
-              <EditField label="Tipo de producto" value={productType} onChange={setProductType} />
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">Relevancia</label>
-                <div className="flex gap-2">
-                  {([1, 2, 3] as const).map(r => (
-                    <button
-                      key={r}
-                      onClick={() => setRelevance(r)}
-                      className={`flex-1 rounded-lg py-2 text-sm font-medium ${
-                        relevance === r ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'
-                      }`}
-                    >
-                      {'★'.repeat(r)}
-                    </button>
-                  ))}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Persona asignada</label>
+                  <select value={assignedPerson} onChange={e => setAssignedPerson(e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-primary focus:outline-none">
+                    <option value="">— Sin asignar —</option>
+                    {USERS.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Relevancia</label>
+                  <div className="flex gap-1">
+                    {([1, 2, 3] as const).map(r => (
+                      <button key={r} type="button" onClick={() => setRelevance(r)}
+                        className={`flex-1 rounded-lg py-2 text-[10px] font-bold leading-tight ${relevance === r
+                          ? r === 1 ? 'bg-red-500 text-white' : r === 2 ? 'bg-yellow-400 text-white' : 'bg-gray-400 text-white'
+                          : 'bg-gray-100 text-gray-400'
+                        }`}>{r === 1 ? 'IMPRESCINDIBLE' : r === 2 ? 'IMPORTANTE' : 'OPCIONAL'}</button>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={visited} onChange={e => setVisited(e.target.checked)} className="h-4 w-4 rounded" />
-                <span className="text-sm text-gray-600">Visitado</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={hasCatalogue} onChange={e => setHasCatalogue(e.target.checked)} className="h-4 w-4 rounded" />
-                <span className="text-sm text-gray-600">Tiene catálogo</span>
-              </label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={visited} onChange={e => setVisited(e.target.checked)} className="h-4 w-4 rounded" />
+                  <span className="text-sm text-gray-600">Visitado</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={hasCatalogue} onChange={e => setHasCatalogue(e.target.checked)} className="h-4 w-4 rounded" />
+                  <span className="text-sm text-gray-600">Tiene catálogo</span>
+                </label>
+              </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-500">Temas pendientes <span className="font-normal text-gray-400">— incidencias o temas a tratar con el proveedor</span></label>
                 <textarea value={pendingTopics} onChange={e => setPendingTopics(e.target.value)} rows={2} className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-primary focus:outline-none" />
@@ -200,12 +216,13 @@ export default function SupplierDetail({ currentUser }: Props) {
             </div>
           ) : (
             <div className="space-y-2 text-sm">
+              <InfoRow label="Tipo producto" value={supplier.product_type || '—'} />
               <InfoRow label="Stand" value={supplier.stand} />
-              <InfoRow label="Persona asignada" value={supplier.assigned_person || '—'} />
-              <InfoRow label="Producto" value={supplier.product_type || '—'} />
-              <InfoRow label="Emails" value={supplier.emails.join(', ') || '—'} />
+              <InfoRow label="Contacto (Nombre)" value={supplier.contact_person || '—'} />
               <InfoRow label="Teléfono" value={supplier.phone || '—'} />
-              <InfoRow label="Relevancia" value={String(supplier.relevance)} />
+              <InfoRow label="Emails" value={supplier.emails.join(', ') || '—'} />
+              <InfoRow label="Persona asignada" value={supplier.assigned_person || '—'} />
+              <InfoRow label="Relevancia" value={supplier.relevance === 1 ? 'IMPRESCINDIBLE' : supplier.relevance === 2 ? 'IMPORTANTE' : 'OPCIONAL'} />
               <InfoRow label="Visitado" value={supplier.visited ? 'Sí' : 'No'} />
               <InfoRow label="Catálogo" value={supplier.has_catalogue ? 'Sí' : 'No'} />
               {supplier.pending_topics && (
