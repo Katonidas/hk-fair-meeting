@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
@@ -6,7 +6,7 @@ import { db } from '@/lib/db'
 import { uploadPhoto, compressImage } from '@/lib/storage'
 import { formatDate, formatTime } from '@/lib/format'
 import type { UserName, Product, SampleStatus, ProductStatus, Supplier } from '@/types'
-import { StatusBadge } from '@/pages/CapturedProducts'
+import { StatusBadge, ProductDetailModal } from '@/pages/CapturedProducts'
 
 interface Props {
   currentUser: UserName
@@ -235,8 +235,9 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
           {products && products.length > 0 ? (
             <ProductsTable
               products={products}
-              onEdit={(p) => { setEditingProduct(p); setShowProductForm(true) }}
-              onDelete={async (id) => { await db.products.delete(id) }}
+              onDelete={async (pid) => { await db.products.delete(pid) }}
+              supplierName={supplier.name}
+              supplierStand={supplier.stand}
             />
           ) : (
             <p className="py-4 text-center text-sm text-gray-400">
@@ -331,105 +332,82 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
 
 function ProductsTable({
   products,
-  onEdit,
   onDelete,
+  supplierName,
+  supplierStand,
 }: {
   products: Product[]
-  onEdit: (p: Product) => void
   onDelete: (id: string) => void
+  supplierName?: string
+  supplierStand?: string
 }) {
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [viewImage, setViewImage] = useState<string | null>(null)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null)
 
   const fmt = (n: number | null) => n != null ? n.toFixed(2) : '—'
 
   return (
     <>
-      <div className="-mx-4 overflow-x-auto">
-        <table className="w-full min-w-[650px] text-xs">
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table className="w-full text-xs" style={{ minWidth: 700 }}>
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="px-2 py-1.5 text-left font-semibold text-gray-500">Tipo</th>
-              <th className="px-2 py-1.5 text-left font-semibold text-gray-500">Item Number</th>
-              <th className="px-2 py-1.5 text-right font-semibold text-gray-500">Precio USD</th>
-              <th className="px-2 py-1.5 text-right font-semibold text-gray-500">Target USD</th>
+              <th className="px-2 py-1.5 text-left font-semibold text-gray-500">Item</th>
+              <th className="px-2 py-1.5 text-right font-semibold text-gray-500">Precio</th>
+              <th className="px-2 py-1.5 text-right font-semibold text-gray-500">Target</th>
               <th className="px-2 py-1.5 text-right font-semibold text-gray-500">MOQ</th>
               <th className="px-2 py-1.5 text-left font-semibold text-gray-500">Features</th>
               <th className="px-2 py-1.5 text-center font-semibold text-gray-500">Sample</th>
-              <th className="px-2 py-1.5 text-center font-semibold text-gray-500">Estado Sample</th>
+              <th className="px-2 py-1.5 text-center font-semibold text-gray-500">Est. Sample</th>
               <th className="px-2 py-1.5 text-center font-semibold text-gray-500">Estado</th>
             </tr>
           </thead>
           <tbody>
             {products.map(p => {
-              const isExpanded = expandedId === p.id
-              const sampleLabel = { collected: 'Recogido', pending: 'Pdte', no: '—' }[p.sample_status]
+              const sampleLabel = { collected: 'Recibido', pending: 'Pdte', no: '—' }[p.sample_status]
               const sampleColor = { collected: 'text-green-600 font-bold', pending: 'text-yellow-600', no: 'text-gray-300' }[p.sample_status]
               return (
-                <Fragment key={p.id}>
-                  <tr
-                    onClick={() => setExpandedId(isExpanded ? null : p.id)}
-                    className="cursor-pointer border-b border-gray-100 bg-white hover:bg-blue-50"
-                  >
-                    <td className="px-2 py-2 text-gray-600">{p.product_type || '—'}</td>
-                    <td className="px-2 py-2 font-medium text-gray-800">{p.item_model || '—'}</td>
-                    <td className="px-2 py-2 text-right text-gray-600">{fmt(p.price)}</td>
-                    <td className="px-2 py-2 text-right text-gray-600">{fmt(p.target_price)}</td>
-                    <td className="px-2 py-2 text-right text-gray-600">{p.moq || '—'}</td>
-                    <td className="group relative px-2 py-2 text-gray-500 max-w-[120px] truncate">
-                      {p.features || '—'}
-                      {p.features && (
-                        <div className="pointer-events-none invisible absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-gray-200 bg-white p-2 text-xs text-gray-700 shadow-lg group-hover:visible whitespace-pre-wrap">
-                          {p.features}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-center text-gray-600">{p.sample_units || '—'}</td>
-                    <td className={`px-2 py-2 text-center ${sampleColor}`}>{sampleLabel}</td>
-                    <td className="px-2 py-2 text-center"><StatusBadge status={p.status} /></td>
-                  </tr>
-                  {isExpanded && (
-                    <tr className="border-b border-gray-200 bg-gray-50">
-                      <td colSpan={9} className="px-3 py-3">
-                        <div className="space-y-2 text-xs text-gray-500">
-                          {p.options && <p><span className="font-medium text-gray-700">Options:</span> {p.options}</p>}
-                          {p.observations && <p><span className="font-medium text-gray-700">Notas:</span> {p.observations}</p>}
-                          {p.photos && p.photos.length > 0 && (
-                            <div>
-                              <p className="mb-1 font-medium text-gray-700">Fotos:</p>
-                              <div className="flex flex-wrap gap-2">
-                                {p.photos.map((url, i) => (
-                                  <img
-                                    key={i}
-                                    src={url}
-                                    alt={`Foto ${i + 1}`}
-                                    onClick={(e) => { e.stopPropagation(); setViewImage(url) }}
-                                    className="h-14 w-14 cursor-pointer rounded-lg object-cover hover:opacity-80"
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          <div className="flex gap-2 pt-1">
-                            <button onClick={(e) => { e.stopPropagation(); onEdit(p) }} className="rounded bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">Editar</button>
-                            <button onClick={(e) => { e.stopPropagation(); onDelete(p.id) }} className="rounded bg-red-50 px-3 py-1.5 text-xs font-medium text-red-500">Eliminar</button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
+                <tr
+                  key={p.id}
+                  onClick={() => setSelectedProduct(p)}
+                  className="cursor-pointer border-b border-gray-100 bg-white hover:bg-blue-50"
+                >
+                  <td className="px-2 py-2 text-gray-600">{p.product_type || '—'}</td>
+                  <td className="px-2 py-2 font-medium text-gray-800">{p.item_model || '—'}</td>
+                  <td className="px-2 py-2 text-right text-gray-600">{fmt(p.price)}</td>
+                  <td className="px-2 py-2 text-right text-gray-600">{fmt(p.target_price)}</td>
+                  <td className="px-2 py-2 text-right text-gray-600">{p.moq || '—'}</td>
+                  <td className="px-2 py-2 text-gray-500 max-w-[100px] truncate">{p.features || '—'}</td>
+                  <td className="px-2 py-2 text-center text-gray-600">{p.sample_units || '—'}</td>
+                  <td className={`px-2 py-2 text-center ${sampleColor}`}>{sampleLabel}</td>
+                  <td className="px-2 py-2 text-center"><StatusBadge status={p.status} /></td>
+                </tr>
               )
             })}
           </tbody>
         </table>
       </div>
 
-      {/* Image viewer */}
-      {viewImage && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80" onClick={() => setViewImage(null)}>
-          <img src={viewImage} alt="Foto ampliada" className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain" />
-          <button onClick={() => setViewImage(null)} className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/40">✕</button>
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <ProductDetailModal
+          product={{
+            ...selectedProduct,
+            status: selectedProduct.status || 'interesting',
+            supplierName: supplierName || '—',
+            supplierStand: supplierStand || '—',
+          }}
+          onClose={() => setSelectedProduct(null)}
+          onPhotoClick={setEnlargedPhoto}
+          onDeleted={() => { onDelete(selectedProduct.id); setSelectedProduct(null) }}
+        />
+      )}
+
+      {/* Enlarged Photo */}
+      {enlargedPhoto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80" onClick={() => setEnlargedPhoto(null)}>
+          <img src={enlargedPhoto} alt="Foto ampliada" className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain" />
         </div>
       )}
     </>
