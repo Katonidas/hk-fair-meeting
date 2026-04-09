@@ -220,7 +220,16 @@ export default function RoutePlanner() {
 
   // Route optimization
   function generateRoute() {
-    const candidates = applyFilters(pending)
+    let candidates = applyFilters(pending)
+
+    // If prioritizing by potential products, exclude suppliers with 0 potentials
+    if (priorityMode === 'potential') {
+      candidates = candidates.filter(e => e.potentialCount > 0)
+    }
+
+    // Parse starting position (e.g. "8N" → pavilion 8)
+    const startPos = parsePosition()
+    const startBuilding = startPos ? getBuilding(startPos.pavilion) : null
 
     // Group by building
     const buildingGroups = new Map<string, EnrichedSupplier[]>()
@@ -242,10 +251,6 @@ export default function RoutePlanner() {
       buildingScores.push({ building, totalScore, items })
     }
 
-    // Determine starting building from position
-    const startPos = parsePosition()
-    const startBuilding = startPos ? getBuilding(startPos.pavilion) : null
-
     // Sort buildings: starting building first, then by score descending
     buildingScores.sort((a, b) => {
       if (startBuilding) {
@@ -255,26 +260,28 @@ export default function RoutePlanner() {
       return b.totalScore - a.totalScore
     })
 
-    // Within each building, sort by pavilion order
+    // Within each building, order by pavilion sequence starting from current position
     const routeIds: string[] = []
     for (const bg of buildingScores) {
       const pavilionOrder = BUILDINGS[bg.building] || []
 
-      // Determine direction based on starting position or scores
+      // Determine traversal direction based on starting pavilion
       let orderedPavilions: number[]
       if (startPos && bg.building === startBuilding) {
-        // Start from the pavilion closest to our position
         const startPavIdx = pavilionOrder.indexOf(startPos.pavilion)
         if (startPavIdx >= 0) {
-          // If near the end (high index), go reverse
-          orderedPavilions = startPavIdx >= pavilionOrder.length / 2
-            ? [...pavilionOrder].reverse()
-            : [...pavilionOrder]
+          // Start from current pavilion, go forward first, then backward
+          // e.g. at pav 8 in [3,6,8,10]: visit 8 → 10 → 6 → 3
+          // Actually: go to nearest end first. 8 is closer to 10, so 8→10 then back 6→3
+          const forward = pavilionOrder.slice(startPavIdx)  // [8, 10]
+          const backward = pavilionOrder.slice(0, startPavIdx).reverse() // [6, 3]
+          orderedPavilions = [...forward, ...backward]
         } else {
+          // Pavilion not in this building's list — just use natural order
           orderedPavilions = [...pavilionOrder]
         }
       } else {
-        // Default: check which end has higher scores
+        // No starting position or different building: pick direction with highest-scoring end
         const firstPavScore = bg.items
           .filter(e => e.parsed && e.parsed.pavilion === pavilionOrder[0])
           .reduce((s, e) => s + e.score, 0)
@@ -287,20 +294,22 @@ export default function RoutePlanner() {
           : [...pavilionOrder]
       }
 
-      // Sort items within building: by pavilion order, then aisle, then stand number
+      // Build pavilion index for sorting
       const pavIndex = new Map<number, number>()
       orderedPavilions.forEach((p, i) => pavIndex.set(p, i))
 
+      // Sort items: by pavilion traversal order, then by score within pavilion (best first), then by aisle/stand
       bg.items.sort((a, b) => {
         const aPavIdx = a.parsed ? (pavIndex.get(a.parsed.pavilion) ?? 999) : 999
         const bPavIdx = b.parsed ? (pavIndex.get(b.parsed.pavilion) ?? 999) : 999
         if (aPavIdx !== bPavIdx) return aPavIdx - bPavIdx
+        // Within same pavilion: higher score first
+        if (a.score !== b.score) return b.score - a.score
+        // Then by aisle and stand number
         const aAisle = a.parsed?.aisle || ''
         const bAisle = b.parsed?.aisle || ''
         if (aAisle !== bAisle) return aAisle.localeCompare(bAisle)
-        const aNum = a.parsed?.number ?? 0
-        const bNum = b.parsed?.number ?? 0
-        return aNum - bNum
+        return (a.parsed?.number ?? 0) - (b.parsed?.number ?? 0)
       })
 
       for (const e of bg.items) {
