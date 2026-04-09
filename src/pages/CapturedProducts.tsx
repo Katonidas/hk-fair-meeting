@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
 import { normalize } from '@/lib/normalize'
-import type { ProductStatus } from '@/types'
+import type { ProductStatus, SampleStatus } from '@/types'
 
 type SortCol = 'supplierName' | 'supplierStand' | 'product_type' | 'item_model' | 'price' | 'target_price' | 'features' | 'moq' | 'options' | 'sample_status' | 'status'
 
@@ -294,10 +294,21 @@ function ProductDetailModal({
   const [options, setOptions] = useState(product.options)
   const [observations, setObservations] = useState(product.observations)
   const [currentStatus, setCurrentStatus] = useState<ProductStatus>(product.status)
+  const [sampleStatus, setSampleStatus] = useState(product.sample_status)
+  const [sampleUnits, setSampleUnits] = useState(product.sample_units?.toString() || '1')
 
   async function handleStatusChange(newStatus: ProductStatus) {
     setCurrentStatus(newStatus)
     await db.products.update(product.id, { status: newStatus })
+  }
+
+  async function handleSampleChange(newSample: SampleStatus) {
+    setSampleStatus(newSample)
+    await db.products.update(product.id, { sample_status: newSample })
+  }
+
+  async function handleSampleUnitsSave() {
+    await db.products.update(product.id, { sample_units: sampleUnits ? parseInt(sampleUnits) : null })
   }
 
   async function handleSaveEdits() {
@@ -375,6 +386,42 @@ function ProductDetailModal({
             </div>
           </div>
 
+          {/* Sample status — always interactive */}
+          <div>
+            <p className="mb-2 text-xs font-medium text-gray-500">Estado Sample</p>
+            <div className="flex gap-2 items-center">
+              <input
+                type="number"
+                value={sampleUnits}
+                onChange={e => setSampleUnits(e.target.value)}
+                onBlur={handleSampleUnitsSave}
+                className="w-14 shrink-0 rounded-lg border border-gray-200 px-2 py-2 text-center text-sm focus:border-primary focus:outline-none"
+                min="0"
+              />
+              {([
+                ['collected', 'RECIBIDO', 'green'],
+                ['pending', 'PDTE', 'yellow'],
+                ['no', 'NO', 'gray'],
+              ] as const).map(([val, label, color]) => (
+                <button
+                  key={val}
+                  onClick={() => handleSampleChange(val)}
+                  className={`flex-1 rounded-lg py-2.5 text-sm font-bold transition-colors ${
+                    sampleStatus === val
+                      ? color === 'green' ? 'bg-green-500 text-white'
+                        : color === 'yellow' ? 'bg-yellow-500 text-white'
+                        : 'bg-gray-500 text-white'
+                      : color === 'green' ? 'border border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                        : color === 'yellow' ? 'border border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+                        : 'border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Supplier info */}
           <div className="rounded-lg bg-gray-50 p-3">
             <p className="text-xs font-semibold text-gray-500">Proveedor</p>
@@ -449,15 +496,6 @@ function ProductDetailModal({
               </div>
               <DetailField label="Features / Specs" value={product.features || '—'} />
               <DetailField label="Options" value={product.options || '—'} />
-              <div className="grid grid-cols-2 gap-3">
-                <DetailField
-                  label="Sample"
-                  value={
-                    product.sample_status === 'collected' ? `Recogido (${product.sample_units || 0} uds)` :
-                    product.sample_status === 'pending' ? `Pdte envio (${product.sample_units || 0} uds)` : 'No'
-                  }
-                />
-              </div>
               {product.observations && (
                 <DetailField label="Observaciones" value={product.observations} />
               )}
