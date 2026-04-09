@@ -10,88 +10,107 @@ export function generateEmailBody(
   meeting: Meeting,
   products: Product[],
 ): string {
-  const lines: string[] = []
+  const L: string[] = []
 
-  lines.push('Hello,')
-  lines.push('')
-  lines.push(`Dear ${supplier.name} team,`)
-  lines.push('')
-  lines.push('It was a pleasure visiting your stand at the HK Sources Fair.')
-  lines.push('Please find below a summary of our meeting.')
-  lines.push('')
+  L.push('Hello,')
+  L.push('')
+  L.push(`Dear ${supplier.name} team,`)
+  L.push('')
+  L.push('It was a pleasure visiting your stand at the HK Sources Fair.')
+  L.push('Please find below a summary of our meeting.')
+  L.push('')
 
+  // ── URGENT NOTES ──
   if (meeting.urgent_notes.trim()) {
-    lines.push('⚠️ URGENT NOTES:')
-    lines.push(meeting.urgent_notes.trim())
-    lines.push('')
+    L.push('════════════════════════════════════════')
+    L.push('⚠️  URGENT NOTES')
+    L.push('════════════════════════════════════════')
+    L.push('')
+    L.push(meeting.urgent_notes.trim())
+    L.push('')
   }
 
-  lines.push('---')
-  lines.push('')
-  lines.push('*** TERMS & CONDITIONS ***')
-  lines.push('')
-  lines.push('IMPORTANT — Please note our standard terms and conditions.')
-  lines.push('All negotiations, agreed conditions and PRICES are based on and must include the following terms:')
-  lines.push('')
-  lines.push(getTerms())
-  lines.push('')
-  lines.push('SERVICE REQUIREMENTS:')
-  lines.push(getQOS())
-  lines.push('')
+  // ── TERMS & CONDITIONS ──
+  L.push('════════════════════════════════════════')
+  L.push('TERMS & CONDITIONS')
+  L.push('════════════════════════════════════════')
+  L.push('')
+  L.push('IMPORTANT: Please note our standard terms and conditions.')
+  L.push('All negotiations, agreed conditions and PRICES are based on and must include the following terms:')
+  L.push('')
+  L.push(getTerms())
+  L.push('')
 
+  // ── SERVICE REQUIREMENTS ──
+  L.push('————————————————————————————————————————')
+  L.push('SERVICE REQUIREMENTS')
+  L.push('————————————————————————————————————————')
+  L.push('')
+  L.push(getQOS())
+  L.push('')
+
+  // ── PRODUCTS ──
   if (products.length > 0) {
-    lines.push('---')
-    lines.push('')
-    lines.push('We are interested in the following products:')
-    lines.push('')
+    L.push('════════════════════════════════════════')
+    L.push('PRODUCTS OF INTEREST')
+    L.push('════════════════════════════════════════')
+    L.push('')
 
-    for (const p of products) {
-      lines.push(`PRODUCT: ${p.product_type || '—'} — ITEM: ${p.item_model || '—'}`)
-      lines.push(`  PRICE: ${p.price ? `$${p.price} ${p.price_currency}` : '—'}`)
-      lines.push(`  FEATURES: ${p.features || '—'}`)
-      lines.push(`  MOQ: ${p.moq || '—'}`)
-      lines.push(`  OPTIONS: ${p.options || '—'}`)
+    for (let i = 0; i < products.length; i++) {
+      const p = products[i]
+      const num = i + 1
+      L.push(`── Product ${num} ──────────────────────`)
+      L.push(`  PRODUCT TYPE: ${p.product_type || '—'}`)
+      L.push(`  ITEM/MODEL:   ${p.item_model || '—'}`)
+      L.push(`  PRICE:        ${p.price != null ? `$${p.price.toFixed(2)} ${p.price_currency}` : '—'}`)
+      L.push(`  MOQ:          ${p.moq || '—'}`)
+      L.push(`  FEATURES:     ${p.features || '—'}`)
+      L.push(`  OPTIONS:      ${p.options || '—'}`)
 
       const sampleText = {
         collected: 'YES (collected)',
         pending: 'PENDING (supplier to send)',
         no: 'NO',
       }[p.sample_status]
-      lines.push(`  SAMPLE: ${sampleText}${p.sample_units ? ` — ${p.sample_units} units` : ''}`)
+      L.push(`  SAMPLE:       ${sampleText}${p.sample_units ? ` - ${p.sample_units} units` : ''}`)
 
-      const notes: string[] = []
       if (p.target_price) {
-        notes.push(`WE NEED THIS PRICE: $${p.target_price} — PLEASE CHECK IT`)
+        L.push(`  >> WE NEED THIS PRICE: $${p.target_price.toFixed(2)} - PLEASE CHECK IT <<`)
       }
       if (p.observations) {
-        notes.push(p.observations)
+        L.push(`  NOTES:        ${p.observations}`)
       }
-      if (notes.length) {
-        lines.push(`  NOTES: ${notes.join(' | ')}`)
-      }
-      lines.push('')
+      L.push('')
     }
   }
 
-  lines.push('---')
-  lines.push('')
-  lines.push('PLEASE SEND DATASHEET AND PICTURES OF THESE PRODUCTS ASAP.')
-  lines.push('')
-  lines.push('Regarding samples: please prepare all samples indicated in the table above.')
-  lines.push('Please coordinate delivery with Mr. Chen to have them at our Shenzhen hotel on April 15-16.')
-  lines.push('Contact Mr. Chen ASAP to coordinate (+86 136 3268 9109).')
+  // ── DATASHEETS & SAMPLES ──
+  L.push('════════════════════════════════════════')
+  L.push('DATASHEETS & SAMPLES')
+  L.push('════════════════════════════════════════')
+  L.push('')
+  L.push('PLEASE SEND DATASHEET AND PICTURES OF THESE PRODUCTS ASAP.')
+  L.push('')
+  L.push('Regarding samples: please prepare all samples indicated above.')
+  L.push('Please coordinate delivery with Mr. Chen to have them at our Shenzhen hotel on April 15-16.')
+  L.push('Contact Mr. Chen ASAP to coordinate (+86 136 3268 9109).')
+  L.push('')
 
+  // ── ADDITIONAL NOTES ──
   if (meeting.other_notes.trim()) {
-    lines.push('')
-    lines.push('ADDITIONAL NOTES:')
-    lines.push(meeting.other_notes.trim())
+    L.push('————————————————————————————————————————')
+    L.push('ADDITIONAL NOTES')
+    L.push('————————————————————————————————————————')
+    L.push('')
+    L.push(meeting.other_notes.trim())
+    L.push('')
   }
 
-  lines.push('')
-  lines.push('Best regards,')
-  lines.push(`${meeting.user_name} - APPROX`)
+  L.push('')
+  L.push('Best regards,')
+  L.push(`${meeting.user_name} - APPROX`)
 
-  return lines.join('\n')
+  return L.join('\n')
 }
 
 export function buildMailtoUrl(
@@ -100,10 +119,11 @@ export function buildMailtoUrl(
   subject: string,
   body: string,
 ): string {
-  const params = new URLSearchParams()
-  if (cc.length) params.set('cc', cc.join(','))
-  params.set('subject', subject)
-  params.set('body', body)
+  // Use encodeURIComponent instead of URLSearchParams to avoid + for spaces
+  const parts: string[] = []
+  if (cc.length) parts.push('cc=' + encodeURIComponent(cc.join(',')))
+  parts.push('subject=' + encodeURIComponent(subject))
+  parts.push('body=' + encodeURIComponent(body))
 
-  return `mailto:${to.join(',')}?${params.toString()}`
+  return `mailto:${encodeURIComponent(to.join(','))}?${parts.join('&')}`
 }
