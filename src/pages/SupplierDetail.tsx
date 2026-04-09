@@ -7,7 +7,8 @@ import { formatDate, formatTime } from '@/lib/format'
 import { normalize } from '@/lib/normalize'
 import { USERS } from '@/lib/constants'
 import type { UserName, Relevance, ProductStatus, SampleStatus } from '@/types'
-import { StatusBadge } from '@/pages/CapturedProducts'
+import { StatusBadge, ProductDetailModal } from '@/pages/CapturedProducts'
+import type { EnrichedProduct } from '@/pages/CapturedProducts'
 
 interface Props {
   currentUser: UserName
@@ -53,8 +54,11 @@ export default function SupplierDetail({ currentUser }: Props) {
 
   const [prodSortCol, setProdSortCol] = useState<string>('product_type')
   const [prodSortAsc, setProdSortAsc] = useState(true)
-  const [selectedProduct, setSelectedProduct] = useState<SupplierProduct | null>(null)
+  const [selectedProduct, setSelectedProduct] = useState<EnrichedProduct | null>(null)
   const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null)
+
+  const [meetingSortCol, setMeetingSortCol] = useState('visited_at')
+  const [meetingSortAsc, setMeetingSortAsc] = useState(false)
 
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
@@ -139,7 +143,7 @@ export default function SupplierDetail({ currentUser }: Props) {
       updated_at: now,
       synced_at: null,
     })
-    navigate(`/meeting/${meetingId}`)
+    navigate(`/meeting/${meetingId}?from=supplier&sid=${id}`)
   }
 
   if (!supplier) {
@@ -293,37 +297,18 @@ export default function SupplierDetail({ currentUser }: Props) {
         )}
 
         {/* Meetings */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-gray-700">
-            Reuniones ({meetings?.length || 0})
-          </h2>
-          {meetings && meetings.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              {meetings.map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => navigate(`/meeting/${m.id}`)}
-                  className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">{m.user_name}</p>
-                    <p className="text-xs text-gray-400">
-                      {formatDate(m.visited_at)} {formatTime(m.visited_at)}
-                      {' · '}{m.productCount} productos
-                    </p>
-                  </div>
-                  {m.email_generated ? (
-                    <span className="text-lg text-green-500">✓</span>
-                  ) : (
-                    <span className="text-lg text-yellow-400">⏳</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="py-4 text-center text-sm text-gray-400">Sin reuniones aún</p>
-          )}
-        </div>
+        <SupplierMeetingsTable
+          meetings={meetings}
+          supplierId={id!}
+          currentUser={currentUser}
+          navigate={navigate}
+          sortCol={meetingSortCol}
+          sortAsc={meetingSortAsc}
+          onSort={(col) => {
+            if (col === meetingSortCol) setMeetingSortAsc(!meetingSortAsc)
+            else { setMeetingSortCol(col); setMeetingSortAsc(true) }
+          }}
+        />
 
         {/* Productos */}
         <SupplierProductsTable
@@ -336,45 +321,25 @@ export default function SupplierDetail({ currentUser }: Props) {
             if (col === prodSortCol) setProdSortAsc(!prodSortAsc)
             else { setProdSortCol(col); setProdSortAsc(true) }
           }}
-          onSelectProduct={setSelectedProduct}
+          onSelectProduct={(p) => {
+            const enriched: EnrichedProduct = {
+              ...p,
+              supplierName: supplier.name,
+              supplierStand: supplier.stand,
+            }
+            setSelectedProduct(enriched)
+          }}
         />
       </div>
 
       {/* Product Detail Modal */}
       {selectedProduct && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setSelectedProduct(null)}>
-          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5" onClick={e => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-800">Detalle del producto</h3>
-              <button onClick={() => setSelectedProduct(null)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">&#10005;</button>
-            </div>
-            <div className="space-y-3">
-              <StatusBadge status={(selectedProduct as { status?: ProductStatus }).status} />
-              <div className="grid grid-cols-2 gap-3">
-                <div><p className="text-xs font-medium text-gray-500">Tipo de producto</p><p className="text-sm text-gray-800">{selectedProduct.product_type || '—'}</p></div>
-                <div><p className="text-xs font-medium text-gray-500">Item / Model</p><p className="text-sm text-gray-800">{selectedProduct.item_model || '—'}</p></div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div><p className="text-xs font-medium text-gray-500">Precio</p><p className="text-sm text-gray-800">{selectedProduct.price ? `$${selectedProduct.price}` : '—'}</p></div>
-                <div><p className="text-xs font-medium text-gray-500">Target</p><p className="text-sm text-gray-800">{selectedProduct.target_price ? `$${selectedProduct.target_price}` : '—'}</p></div>
-                <div><p className="text-xs font-medium text-gray-500">MOQ</p><p className="text-sm text-gray-800">{selectedProduct.moq || '—'}</p></div>
-              </div>
-              {selectedProduct.features && <div><p className="text-xs font-medium text-gray-500">Features</p><p className="text-sm text-gray-800 whitespace-pre-wrap">{selectedProduct.features}</p></div>}
-              {selectedProduct.options && <div><p className="text-xs font-medium text-gray-500">Options</p><p className="text-sm text-gray-800 whitespace-pre-wrap">{selectedProduct.options}</p></div>}
-              {selectedProduct.observations && <div><p className="text-xs font-medium text-gray-500">Observaciones</p><p className="text-sm text-gray-800 whitespace-pre-wrap">{selectedProduct.observations}</p></div>}
-              {selectedProduct.photos && selectedProduct.photos.length > 0 && (
-                <div>
-                  <p className="mb-2 text-xs font-medium text-gray-500">Fotos ({selectedProduct.photos.length})</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedProduct.photos.map((url: string, i: number) => (
-                      <img key={i} src={url} alt={`Foto ${i + 1}`} className="h-20 w-20 cursor-pointer rounded-lg border border-gray-200 object-cover hover:opacity-80" onClick={() => setEnlargedPhoto(url)} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <ProductDetailModal
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          onPhotoClick={setEnlargedPhoto}
+          onDeleted={() => setSelectedProduct(null)}
+        />
       )}
 
       {/* Enlarged Photo */}
@@ -397,7 +362,7 @@ export default function SupplierDetail({ currentUser }: Props) {
             onClick={handleNewMeeting}
             className="flex-1 rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
           >
-            NUEVA REUNIÓN CON ESTE PROVEEDOR
+            NUEVA REUNION CON ESTE PROVEEDOR
           </button>
         </div>
       </div>
@@ -437,6 +402,173 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
+
+/* ── Meetings Table (same format as Home MeetingsList, without Proveedor column) ── */
+
+function SupplierMeetingsTable({
+  meetings,
+  supplierId,
+  currentUser,
+  navigate,
+  sortCol,
+  sortAsc,
+  onSort,
+}: {
+  meetings: Array<{
+    id: string
+    supplier_id: string
+    user_name: string
+    visited_at: string
+    productCount: number
+    email_generated: boolean
+    status?: string
+    location?: string
+    urgent_notes: string
+    other_notes: string
+    business_card_photo_url: string
+  }> | undefined
+  supplierId: string
+  currentUser: UserName
+  navigate: (path: string) => void
+  sortCol: string
+  sortAsc: boolean
+  onSort: (col: string) => void
+}) {
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
+
+  async function handleDelete(meetingId: string) {
+    if (!window.confirm('¿Eliminar esta reunión y todos sus productos?')) return
+    await db.products.where('meeting_id').equals(meetingId).delete()
+    await db.meetings.delete(meetingId)
+    setOpenMenu(null)
+  }
+
+  async function handleDuplicate(m: NonNullable<typeof meetings>[number]) {
+    const newId = uuid()
+    const now = new Date().toISOString()
+    await db.meetings.add({
+      id: newId,
+      supplier_id: m.supplier_id,
+      user_name: currentUser,
+      location: (m.location as 'feria' | 'hotel') || 'feria',
+      status: 'draft',
+      visited_at: now,
+      urgent_notes: m.urgent_notes || '',
+      other_notes: m.other_notes || '',
+      business_card_photo_url: m.business_card_photo_url || '',
+      stand_photo_url: (m as Record<string, unknown>).stand_photo_url as string || '',
+      email_generated: false,
+      email_sent_at: null,
+      created_at: now,
+      updated_at: now,
+      synced_at: null,
+    })
+    const products = await db.products.where('meeting_id').equals(m.id).toArray()
+    for (const p of products) {
+      await db.products.add({ ...p, id: uuid(), meeting_id: newId, created_at: now })
+    }
+    setOpenMenu(null)
+    navigate(`/meeting/${newId}?edit=1&from=supplier&sid=${supplierId}`)
+  }
+
+  const sorted = meetings ? [...meetings].sort((a, b) => {
+    let cmp = 0
+    switch (sortCol) {
+      case 'visited_at': cmp = a.visited_at.localeCompare(b.visited_at); break
+      case 'user_name': cmp = a.user_name.localeCompare(b.user_name); break
+      case 'productCount': cmp = a.productCount - b.productCount; break
+      case 'email': cmp = (a.email_generated ? 1 : 0) - (b.email_generated ? 1 : 0); break
+      case 'location': cmp = (a.location || '').localeCompare(b.location || ''); break
+    }
+    return sortAsc ? cmp : -cmp
+  }) : []
+
+  const arrow = (col: string) => sortCol === col ? (sortAsc ? ' \u2191' : ' \u2193') : ''
+  const thBase = "px-2 py-2 font-semibold text-gray-500 cursor-pointer whitespace-nowrap hover:text-primary"
+
+  return (
+    <div className="rounded-xl bg-white p-4 shadow-sm">
+      <h2 className="mb-3 text-sm font-semibold text-gray-700">
+        Reuniones ({meetings?.length || 0})
+      </h2>
+      {!meetings || meetings.length === 0 ? (
+        <p className="py-4 text-center text-sm text-gray-400">Sin reuniones aún</p>
+      ) : (
+        <div className="-mx-4 overflow-x-auto">
+          <table className="w-full min-w-[600px] text-xs">
+            <thead>
+              <tr className="border-b border-gray-200 bg-gray-50">
+                <th className={`${thBase} text-left`} onClick={() => onSort('visited_at')}>Fecha{arrow('visited_at')}</th>
+                <th className={`${thBase} text-left`} onClick={() => onSort('visited_at')}>Hora</th>
+                <th className={`${thBase} text-left`} onClick={() => onSort('location')}>Lugar{arrow('location')}</th>
+                <th className={`${thBase} text-left`} onClick={() => onSort('user_name')}>Persona{arrow('user_name')}</th>
+                <th className={`${thBase} text-center`} onClick={() => onSort('productCount')}>Prod.{arrow('productCount')}</th>
+                <th className={`${thBase} text-center`} onClick={() => onSort('email')}>Email{arrow('email')}</th>
+                <th className="px-2 py-2 text-center font-semibold text-gray-500 w-10"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(m => {
+                const isDraft = m.status === 'draft' || !m.status
+                const locationLabel = m.location === 'hotel' ? 'Hotel' : 'Feria'
+
+                return (
+                  <tr
+                    key={m.id}
+                    onClick={() => navigate(`/meeting/${m.id}?from=supplier&sid=${supplierId}`)}
+                    className={`cursor-pointer border-b border-gray-100 transition-colors hover:bg-blue-50 ${
+                      isDraft ? 'bg-gray-50' : 'bg-white'
+                    }`}
+                  >
+                    <td className="px-2 py-2.5 text-gray-600">
+                      <div className="flex items-center gap-1">
+                        {formatDate(m.visited_at)}
+                        {isDraft && <span className="rounded bg-yellow-100 px-1 py-0.5 text-[9px] font-medium text-yellow-700">B</span>}
+                      </div>
+                    </td>
+                    <td className="px-2 py-2.5 text-gray-600">{formatTime(m.visited_at)}</td>
+                    <td className="px-2 py-2.5 text-gray-500">{locationLabel}</td>
+                    <td className="px-2 py-2.5 text-gray-500">{m.user_name}</td>
+                    <td className="px-2 py-2.5 text-center text-gray-600">{m.productCount}</td>
+                    <td className="px-2 py-2.5 text-center">
+                      {m.email_generated
+                        ? <span className="font-bold text-green-600">S</span>
+                        : <span className="text-gray-300">N</span>}
+                    </td>
+                    <td className="px-2 py-2.5 text-center" onClick={e => e.stopPropagation()}>
+                      <div className="relative">
+                        <button
+                          onClick={() => setOpenMenu(openMenu === m.id ? null : m.id)}
+                          className="rounded p-1 text-gray-400 hover:bg-gray-100"
+                        >
+                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z" />
+                          </svg>
+                        </button>
+                        {openMenu === m.id && (
+                          <div className="absolute right-0 top-8 z-20 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                            <button onClick={() => { setOpenMenu(null); navigate(`/meeting/${m.id}?edit=1&from=supplier&sid=${supplierId}`) }}
+                              className="flex w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">Editar</button>
+                            <button onClick={() => handleDuplicate(m)}
+                              className="flex w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">Duplicar reunión</button>
+                            <button onClick={() => handleDelete(m.id)}
+                              className="flex w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50">Eliminar</button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Products Table ── */
 
 interface SupplierProduct {
   id: string

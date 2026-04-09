@@ -16,6 +16,9 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const fromSupplier = searchParams.get('from') === 'supplier'
+  const supplierIdParam = searchParams.get('sid')
+  const backPath = fromSupplier && supplierIdParam ? `/supplier/${supplierIdParam}` : '/'
   const [editMode, setEditMode] = useState(false)
 
   const meeting = useLiveQuery(() => (id ? db.meetings.get(id) : undefined), [id])
@@ -271,7 +274,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
         {isEditable ? (
           <div className="flex gap-3">
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate(backPath)}
               className="rounded-xl border border-gray-300 bg-gray-50 px-4 py-4 text-base font-medium text-gray-500 transition-colors hover:bg-gray-100"
             >
               ← Volver
@@ -283,7 +286,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
                   await db.meetings.update(id, { status: 'saved', updated_at: new Date().toISOString() })
                 }
                 setEditMode(false)
-                navigate('/')
+                navigate(backPath)
               }}
               className="flex-1 rounded-xl border border-gray-200 bg-white py-4 text-base font-medium text-gray-600 transition-colors hover:bg-gray-50"
             >
@@ -302,7 +305,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
         ) : (
           <div className="flex gap-3">
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate(backPath)}
               className="rounded-xl border border-gray-300 bg-gray-50 px-4 py-4 text-base font-medium text-gray-500 transition-colors hover:bg-gray-100"
             >
               ← Volver

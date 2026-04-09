@@ -8,7 +8,7 @@ import type { ProductStatus, SampleStatus } from '@/types'
 
 type SortCol = 'supplierName' | 'supplierStand' | 'product_type' | 'item_model' | 'price' | 'target_price' | 'features' | 'moq' | 'options' | 'sample_status' | 'status'
 
-interface EnrichedProduct {
+export interface EnrichedProduct {
   id: string
   meeting_id: string
   product_type: string
@@ -275,14 +275,16 @@ export function StatusBadge({ status }: { status: ProductStatus | undefined }) {
   )
 }
 
-function ProductDetailModal({
+export function ProductDetailModal({
   product,
   onClose,
   onPhotoClick,
+  onDeleted,
 }: {
   product: EnrichedProduct
   onClose: () => void
   onPhotoClick: (url: string) => void
+  onDeleted?: () => void
 }) {
   const [editing, setEditing] = useState(false)
   const [productType, setProductType] = useState(product.product_type)
@@ -519,6 +521,19 @@ function ProductDetailModal({
               </div>
             </div>
           )}
+
+          {/* Delete button */}
+          <button
+            onClick={async () => {
+              if (!window.confirm('¿Eliminar este producto? Esta acción no se puede deshacer.')) return
+              await db.products.delete(product.id)
+              if (onDeleted) onDeleted()
+              onClose()
+            }}
+            className="w-full rounded-xl border border-red-300 bg-red-50 py-3 text-sm font-medium text-red-600 hover:bg-red-100"
+          >
+            Eliminar producto
+          </button>
 
           {/* Back button */}
           <button
