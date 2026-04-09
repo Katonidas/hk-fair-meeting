@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
+import { normalize } from '@/lib/normalize'
 
 export default function CapturedProducts() {
   const navigate = useNavigate()
@@ -30,12 +31,12 @@ export default function CapturedProducts() {
     })
 
     if (!search) return enriched
-    const q = search.toLowerCase()
+    const q = normalize(search)
     return enriched.filter(p =>
-      p.supplierName.toLowerCase().includes(q) ||
-      p.product_type.toLowerCase().includes(q) ||
-      p.item_model.toLowerCase().includes(q) ||
-      p.features.toLowerCase().includes(q)
+      normalize(p.supplierName).includes(q) ||
+      normalize(p.product_type).includes(q) ||
+      normalize(p.item_model).includes(q) ||
+      normalize(p.features).includes(q)
     )
   }, [search])
 

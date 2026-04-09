@@ -544,14 +544,22 @@ function PhotoUpload({
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
+  const [error, setError] = useState('')
+
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
+    setError('')
     try {
-      const compressed = await compressImage(file, 1200, 0.8)
-      const uploaded = await uploadPhoto(compressed, folder)
-      if (uploaded) await onUploaded(uploaded)
+      const uploaded = await uploadPhoto(file, folder)
+      if (uploaded) {
+        await onUploaded(uploaded)
+      } else {
+        setError('Error al subir')
+      }
+    } catch (err) {
+      setError('Error: ' + (err instanceof Error ? err.message : 'desconocido'))
     } finally {
       setUploading(false)
       if (cameraRef.current) cameraRef.current.value = ''
@@ -577,24 +585,27 @@ function PhotoUpload({
         <div className="flex h-16 items-center justify-center rounded-lg border-2 border-dashed border-gray-200 text-xs text-gray-400">Subiendo...</div>
       ) : (
         <>
-          {/* Camera - capture attribute triggers native camera */}
+          {/* Camera - capture attribute triggers native camera on mobile */}
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
           <button
             onClick={() => cameraRef.current?.click()}
-            className="flex items-center justify-center gap-1 rounded-lg border border-gray-200 bg-gray-50 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary"
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary"
           >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             Hacer foto
           </button>
           {/* File picker - no capture, opens gallery/file browser */}
-          <input ref={fileRef} type="file" accept="image/*,.heic,.heif" onChange={handleFile} className="hidden" />
+          <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.webp" onChange={handleFile} className="hidden" />
           <button
             onClick={() => fileRef.current?.click()}
-            className="flex items-center justify-center gap-1 rounded-lg border border-gray-200 bg-gray-50 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary"
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary"
           >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
             Subir archivo
           </button>
         </>
       )}
+      {error && <p className="text-[10px] text-red-500">{error}</p>}
     </div>
   )
 }

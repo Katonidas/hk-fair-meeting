@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
 import { formatDate, formatTime } from '@/lib/format'
+import { normalize } from '@/lib/normalize'
 import type { UserName, Relevance } from '@/types'
 
 interface Props {
@@ -30,11 +31,11 @@ export default function SupplierDetail({ currentUser }: Props) {
 
   const matchingSearchedProducts = useLiveQuery(async () => {
     if (!supplier?.product_type) return []
-    const supplierTypes = supplier.product_type.toLowerCase().split(/[,;/]/).map(t => t.trim()).filter(Boolean)
+    const supplierTypes = normalize(supplier.product_type).split(/[,;/]/).map(t => t.trim()).filter(Boolean)
     if (supplierTypes.length === 0) return []
     const all = await db.searched_products.toArray()
     return all.filter(sp => {
-      const spType = sp.product_type.toLowerCase()
+      const spType = normalize(sp.product_type)
       return supplierTypes.some(st => spType.includes(st) || st.includes(spType))
     })
   }, [supplier?.product_type])

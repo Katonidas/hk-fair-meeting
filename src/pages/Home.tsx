@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
 import { useSync } from '@/hooks/useSync'
 import { formatDate, formatTime } from '@/lib/format'
+import { normalize } from '@/lib/normalize'
 import type { UserName, Relevance } from '@/types'
 
 interface Props {
@@ -62,12 +63,12 @@ export default function Home({ currentUser, onLogout }: Props) {
 
     let filtered = enriched
     if (search) {
-      const q = search.toLowerCase()
-      filtered = filtered.filter(s => s.name.toLowerCase().includes(q) || s.stand.toLowerCase().includes(q))
+      const q = normalize(search)
+      filtered = filtered.filter(s => normalize(s.name).includes(q) || normalize(s.stand).includes(q))
     }
     if (productFilter) {
-      const pf = productFilter.toLowerCase()
-      filtered = filtered.filter(s => s.product_type.toLowerCase().includes(pf))
+      const pf = normalize(productFilter)
+      filtered = filtered.filter(s => normalize(s.product_type).includes(pf))
     }
     return filtered
   }, [search, productFilter])
@@ -183,10 +184,10 @@ export default function Home({ currentUser, onLogout }: Props) {
                   m.status === 'draft' || !m.status
                 if (!statusOk) return false
                 if (!meetingSearch) return true
-                const q = meetingSearch.toLowerCase()
-                const supplierName = (m.supplier?.name || '').toLowerCase()
-                const dateStr = formatDate(m.visited_at).toLowerCase()
-                const person = (m.user_name || '').toLowerCase()
+                const q = normalize(meetingSearch)
+                const supplierName = normalize(m.supplier?.name || '')
+                const dateStr = normalize(formatDate(m.visited_at))
+                const person = normalize(m.user_name || '')
                 return supplierName.includes(q) || dateStr.includes(q) || person.includes(q)
               })}
               navigate={navigate}

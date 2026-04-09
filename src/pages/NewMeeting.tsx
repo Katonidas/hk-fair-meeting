@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
+import { normalize } from '@/lib/normalize'
 import type { UserName, Supplier, MeetingLocation } from '@/types'
 
 function getLocalDatetime() {
@@ -25,9 +26,9 @@ export default function NewMeeting({ currentUser }: Props) {
   const suppliers = useLiveQuery(async () => {
     const all = await db.suppliers.toArray()
     if (!search) return all.sort((a, b) => a.name.localeCompare(b.name))
-    const q = search.toLowerCase()
+    const q = normalize(search)
     return all
-      .filter(s => s.name.toLowerCase().includes(q) || s.stand.toLowerCase().includes(q) || s.product_type.toLowerCase().includes(q))
+      .filter(s => normalize(s.name).includes(q) || normalize(s.stand).includes(q) || normalize(s.product_type).includes(q))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [search])
 

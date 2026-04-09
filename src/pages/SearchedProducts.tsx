@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
+import { normalize } from '@/lib/normalize'
 import { getFormulaGame, getFormulaTicnova } from '@/lib/settings'
 import type { SearchedProduct } from '@/types/searchedProduct'
 
@@ -44,14 +45,14 @@ export default function SearchedProducts() {
   const products = useLiveQuery(async () => {
     const all = await db.searched_products.toArray()
     if (!search) return all.sort((a, b) => a.product_type.localeCompare(b.product_type))
-    const q = search.toLowerCase()
+    const q = normalize(search)
     return all
       .filter(p =>
-        p.brand.toLowerCase().includes(q) ||
-        p.product_type.toLowerCase().includes(q) ||
-        p.ref_segment.toLowerCase().includes(q) ||
-        p.model_interno.toLowerCase().includes(q) ||
-        p.main_specs.toLowerCase().includes(q)
+        normalize(p.brand).includes(q) ||
+        normalize(p.product_type).includes(q) ||
+        normalize(p.ref_segment).includes(q) ||
+        normalize(p.model_interno).includes(q) ||
+        normalize(p.main_specs).includes(q)
       )
       .sort((a, b) => a.product_type.localeCompare(b.product_type))
   }, [search])
@@ -81,26 +82,30 @@ export default function SearchedProducts() {
 
       for (const row of rows) {
         // Flexible column matching: try to find a value by checking multiple possible column names
+        // Normalize: lowercase, remove accents, remove all non-alphanumeric
+        const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
         const get = (...keys: string[]) => {
-          for (const k of keys) {
-            // Exact match
-            if (row[k] !== undefined && row[k] !== null && row[k] !== '') return String(row[k]).trim()
-            // Case-insensitive match
-            const found = Object.keys(row).find(col => col.toLowerCase().replace(/[^a-z0-9]/g, '') === k.toLowerCase().replace(/[^a-z0-9]/g, ''))
-            if (found && row[found] !== undefined && row[found] !== null && row[found] !== '') return String(row[found]).trim()
+          const normKeys = keys.map(norm)
+          // Try each column in the row
+          for (const col of Object.keys(row)) {
+            const normCol = norm(col)
+            if (normKeys.some(nk => normCol === nk || normCol.includes(nk) || nk.includes(normCol))) {
+              if (row[col] !== undefined && row[col] !== null && row[col] !== '') return String(row[col]).trim()
+            }
           }
           return ''
         }
 
-        const brand = get('MARCA', 'marca', 'brand', 'Brand')
-        const productType = get('TIPO DE PRODUCTO', 'tipo de producto', 'tipodeproducto', 'product_type', 'tipo', 'Tipo', 'Type', 'type', 'TIPO')
-        const refSegment = get('REF. / SEGMENTO', 'REF / SEGMENTO', 'refsegmento', 'ref_segment', 'Ref', 'ref', 'Segmento', 'segmento', 'REF')
-        const mainSpecs = get('MAIN SPECS', 'mainspecs', 'main_specs', 'Specs', 'specs', 'SPECS', 'especificaciones', 'Especificaciones')
-        const targetCost = get('TARGET COST', 'targetcost', 'target_cost', 'Target Cost', 'target', 'COST', 'cost', 'Coste')
-        const examples = get('EXAMPLES', 'examples', 'Examples', 'ejemplo', 'Ejemplo', 'EJEMPLO')
-        const marginTarget = get('MARGIN TARGET', 'margintarget', 'margin_target', 'Margin', 'margin', 'MARGIN', 'margen', 'Margen')
-        const pvpr = get('PVPR', 'pvpr', 'PVP', 'pvp', 'precio', 'Precio')
-        const modelInterno = get('MODEL INTERNO', 'modelinterno', 'model_interno', 'Modelo', 'modelo', 'MODEL', 'model')
+        const brand = get('marca', 'brand')
+        const productType = get('tipodeproducto', 'tipoproducto', 'tipo', 'producttype', 'type')
+        const refSegment = get('refsegmento', 'ref', 'segmento', 'segment')
+        const mainSpecs = get('mainspecs', 'specs', 'especificaciones', 'specifications')
+        const targetCost = get('targetcost', 'coste', 'cost', 'targetcompra')
+        const examples = get('examples', 'ejemplo', 'links', 'fotos')
+        const marginTarget = get('margintarget', 'margin', 'margen')
+        const pvpr = get('pvpr', 'pvp', 'pvprtarget', 'precioventa', 'precio')
+        const modelInterno = get('modelinterno', 'modelo', 'model', 'nombre')
 
         // Skip completely empty rows, but allow rows with at least one field
         if (!brand && !productType && !refSegment && !mainSpecs && !modelInterno) {

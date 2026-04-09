@@ -45,26 +45,48 @@ export default function Settings({ currentUser }: Props) {
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet)
 
+      if (rows.length === 0) {
+        setImportResult('Error: El archivo está vacío')
+        return
+      }
+
+      const cols = Object.keys(rows[0])
+
+      // Flexible column matcher (accent/case insensitive, partial match)
+      const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+      const get = (row: Record<string, unknown>, ...keys: string[]) => {
+        const normKeys = keys.map(norm)
+        for (const col of Object.keys(row)) {
+          const normCol = norm(col)
+          if (normKeys.some(nk => normCol === nk || normCol.includes(nk) || nk.includes(normCol))) {
+            if (row[col] !== undefined && row[col] !== null && row[col] !== '') return String(row[col]).trim()
+          }
+        }
+        return ''
+      }
+
       let count = 0
+      let skipped = 0
       const now = new Date().toISOString()
 
       for (const row of rows) {
-        const name = String(row['name'] || row['Name'] || row['NOMBRE'] || row['nombre'] || row['Supplier'] || row['supplier'] || '').trim()
-        if (!name) continue
+        const name = get(row, 'nombre', 'name', 'supplier', 'proveedor', 'empresa', 'company')
+        if (!name) { skipped++; continue }
 
-        const stand = String(row['stand'] || row['Stand'] || row['STAND'] || row['booth'] || row['Booth'] || '').trim()
-        const emailRaw = String(row['email'] || row['Email'] || row['EMAIL'] || row['emails'] || '')
+        const stand = get(row, 'stand', 'booth', 'ubicacion')
+        const emailRaw = get(row, 'email', 'emails', 'correo', 'mail')
         const emails = emailRaw.split(/[,;]/).map(e => e.trim()).filter(Boolean)
-        const phone = String(row['phone'] || row['Phone'] || row['PHONE'] || row['tel'] || '').trim()
-        const assignedPerson = String(row['assigned_person'] || row['person'] || row['Person'] || row['asignado'] || '').trim()
-        const productType = String(row['product_type'] || row['product'] || row['Product'] || row['tipo'] || '').trim()
-        const relevanceRaw = Number(row['relevance'] || row['Relevance'] || 2)
+        const phone = get(row, 'phone', 'telefono', 'tel', 'movil', 'mobile')
+        const assignedPerson = get(row, 'persona', 'asignado', 'assigned', 'person', 'contacto')
+        const productType = get(row, 'tipodeproducto', 'tipoproducto', 'tipo', 'product', 'producto', 'category')
+        const relevanceRaw = Number(get(row, 'relevancia', 'relevance', 'prioridad') || '2')
         const relevance: Relevance = ([1, 2, 3].includes(relevanceRaw) ? relevanceRaw : 2) as Relevance
-        const visitDay = String(row['visit_day'] || row['day'] || '').trim()
-        const visitSlot = String(row['visit_slot'] || row['slot'] || '').trim()
-        const pendingTopics = String(row['pending_topics'] || row['temas'] || '').trim()
-        const interestingProducts = String(row['interesting_products'] || row['productos'] || '').trim()
-        const currentProducts = String(row['current_products'] || '').trim()
+        const visitDay = get(row, 'visitday', 'dia', 'day')
+        const visitSlot = get(row, 'visitslot', 'slot', 'horario')
+        const pendingTopics = get(row, 'temaspendientes', 'pending', 'temas', 'incidencias')
+        const interestingProducts = get(row, 'productosinteresantes', 'interesting', 'interes')
+        const currentProducts = get(row, 'productosactuales', 'current', 'actuales')
+        const supplierNotes = get(row, 'notas', 'notes', 'observaciones')
 
         await db.suppliers.add({
           id: uuid(),
@@ -82,7 +104,7 @@ export default function Settings({ currentUser }: Props) {
           interesting_products: interestingProducts,
           has_catalogue: false,
           current_products: currentProducts,
-          supplier_notes: '',
+          supplier_notes: supplierNotes,
           is_new: false,
           updated_at: now,
           updated_by: currentUser,
@@ -92,7 +114,7 @@ export default function Settings({ currentUser }: Props) {
         count++
       }
 
-      setImportResult(`${count} proveedores importados correctamente`)
+      setImportResult(`${count} proveedores importados${skipped ? ` (${skipped} filas vacías)` : ''}. Columnas: ${cols.join(', ')}`)
     } catch (err) {
       setImportResult(`Error al importar: ${err instanceof Error ? err.message : 'error desconocido'}`)
     } finally {
@@ -288,12 +310,38 @@ export default function Settings({ currentUser }: Props) {
         {/* Danger Zone */}
         <div className="rounded-xl border border-red-200 bg-red-50 p-4">
           <h2 className="mb-2 text-sm font-semibold text-red-700">Zona peligrosa</h2>
-          <button
-            onClick={handleClearData}
-            className="w-full rounded-lg bg-red-500 py-3 text-sm font-medium text-white transition-colors hover:bg-red-600"
-          >
-            Borrar todos los datos locales
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={async () => {
+                const pwd = window.prompt('Contraseña para borrar reuniones:')
+                if (pwd !== 'APPROX') { if (pwd !== null) window.alert('Contraseña incorrecta'); return }
+                if (!window.confirm('¿Borrar TODAS las reuniones y sus productos?')) return
+                await db.products.clear()
+                await db.product_photos.clear()
+                await db.meetings.clear()
+              }}
+              className="w-full rounded-lg border border-red-300 bg-white py-3 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
+            >
+              Borrar todas las reuniones
+            </button>
+            <button
+              onClick={async () => {
+                const pwd = window.prompt('Contraseña para borrar proveedores:')
+                if (pwd !== 'APPROX') { if (pwd !== null) window.alert('Contraseña incorrecta'); return }
+                if (!window.confirm('¿Borrar TODOS los proveedores? Las reuniones asociadas NO se borran.')) return
+                await db.suppliers.clear()
+              }}
+              className="w-full rounded-lg border border-red-300 bg-white py-3 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
+            >
+              Borrar todos los proveedores
+            </button>
+            <button
+              onClick={handleClearData}
+              className="w-full rounded-lg bg-red-500 py-3 text-sm font-medium text-white transition-colors hover:bg-red-600"
+            >
+              Borrar TODOS los datos locales
+            </button>
+          </div>
         </div>
       </div>
     </div>
