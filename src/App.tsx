@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import UserSelect from '@/pages/UserSelect'
+import Layout from '@/components/Layout'
 import Home from '@/pages/Home'
 import NewMeeting from '@/pages/NewMeeting'
 import MeetingCapture from '@/pages/MeetingCapture'
@@ -19,14 +20,16 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<Home currentUser={currentUser} onLogout={clearUser} />} />
-      <Route path="/meeting/new" element={<NewMeeting currentUser={currentUser} />} />
-      <Route path="/meeting/:id" element={<MeetingCapture currentUser={currentUser} />} />
-      <Route path="/meeting/:id/email" element={<MeetingEmail currentUser={currentUser} />} />
-      <Route path="/supplier/:id" element={<SupplierDetail currentUser={currentUser} />} />
-      <Route path="/searched-products" element={<SearchedProducts />} />
-      <Route path="/captured-products" element={<CapturedProducts />} />
-      <Route path="/settings" element={<Settings currentUser={currentUser} />} />
+      <Route element={<Layout currentUser={currentUser} onLogout={clearUser} />}>
+        <Route path="/" element={<Home currentUser={currentUser} />} />
+        <Route path="/meeting/new" element={<NewMeeting currentUser={currentUser} />} />
+        <Route path="/meeting/:id" element={<MeetingCapture currentUser={currentUser} />} />
+        <Route path="/meeting/:id/email" element={<MeetingEmail currentUser={currentUser} />} />
+        <Route path="/supplier/:id" element={<SupplierDetail currentUser={currentUser} />} />
+        <Route path="/searched-products" element={<SearchedProducts />} />
+        <Route path="/captured-products" element={<CapturedProducts />} />
+        <Route path="/settings" element={<Settings currentUser={currentUser} />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

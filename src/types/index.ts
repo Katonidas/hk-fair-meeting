@@ -2,6 +2,8 @@ export type UserName = 'Carlos' | 'Jesús' | 'Jose Luis'
 
 export type SampleStatus = 'collected' | 'pending' | 'no'
 
+export type ProductStatus = 'discarded' | 'interesting' | 'selected'
+
 export type MeetingLocation = 'feria' | 'hotel'
 
 export type MeetingStatus = 'draft' | 'saved'
@@ -66,6 +68,7 @@ export interface Product {
   sample_units: number | null
   observations: string
   photos: string[]
+  status: ProductStatus
   created_at: string
 }
 

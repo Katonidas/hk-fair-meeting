@@ -31,6 +31,15 @@ export class FairDB extends Dexie {
     })
     this.version(6).stores({})
     this.version(7).stores({})
+    this.version(8).stores({
+      products: 'id, meeting_id, product_type, item_model, status, created_at',
+    }).upgrade(tx => {
+      return tx.table('products').toCollection().modify(product => {
+        if (!product.status) {
+          product.status = 'interesting'
+        }
+      })
+    })
   }
 }
 

@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
@@ -34,7 +33,6 @@ function calcTargetCost(brand: string, pvpr: number | null, marginTarget: string
 }
 
 export default function SearchedProducts() {
-  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingProduct, setEditingProduct] = useState<SearchedProduct | null>(null)
@@ -161,15 +159,7 @@ export default function SearchedProducts() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-light">
-      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/')} className="text-lg font-bold text-primary">HK Fair</button>
-          <span className="mx-2 text-gray-300">/</span>
-          <h1 className="text-lg font-bold text-gray-800">Productos Deseados</h1>
-        </div>
-      </header>
-
+    <div className="flex flex-col">
       <div className="flex-1 px-4 py-3">
         {/* Actions */}
         <div className="mb-3 flex gap-2">

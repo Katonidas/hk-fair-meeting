@@ -6,7 +6,8 @@ import { db } from '@/lib/db'
 import { formatDate, formatTime } from '@/lib/format'
 import { normalize } from '@/lib/normalize'
 import { USERS } from '@/lib/constants'
-import type { UserName, Relevance } from '@/types'
+import type { UserName, Relevance, ProductStatus, SampleStatus } from '@/types'
+import { StatusBadge } from '@/pages/CapturedProducts'
 
 interface Props {
   currentUser: UserName
@@ -40,6 +41,20 @@ export default function SupplierDetail({ currentUser }: Props) {
       return supplierTypes.some(st => spType.includes(st) || st.includes(spType))
     })
   }, [supplier?.product_type])
+
+  const supplierProducts = useLiveQuery(async () => {
+    if (!id) return []
+    const supplierMeetings = await db.meetings.where('supplier_id').equals(id).toArray()
+    const meetingIds = supplierMeetings.map(m => m.id)
+    if (meetingIds.length === 0) return []
+    const allProducts = await db.products.toArray()
+    return allProducts.filter(p => meetingIds.includes(p.meeting_id))
+  }, [id])
+
+  const [prodSortCol, setProdSortCol] = useState<string>('product_type')
+  const [prodSortAsc, setProdSortAsc] = useState(true)
+  const [selectedProduct, setSelectedProduct] = useState<SupplierProduct | null>(null)
+  const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null)
 
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
@@ -136,16 +151,13 @@ export default function SupplierDetail({ currentUser }: Props) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-light pb-24">
-      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white px-4 py-3">
+    <div className="flex flex-col pb-24">
+      {/* Subheader */}
+      <div className="border-b border-gray-200 bg-white px-4 py-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/')} className="text-lg font-bold text-primary">HK Fair</button>
-            <span className="mx-2 text-gray-300">/</span>
-            <div>
-              <h1 className="text-sm font-bold text-gray-800">{supplier.name}</h1>
-              <p className="text-xs text-gray-400">Stand {supplier.stand}</p>
-            </div>
+          <div>
+            <h2 className="text-sm font-bold text-gray-800">{supplier.name}</h2>
+            <p className="text-xs text-gray-400">Stand {supplier.stand}</p>
           </div>
           <button
             onClick={() => editing ? handleSave() : setEditing(true)}
@@ -156,7 +168,7 @@ export default function SupplierDetail({ currentUser }: Props) {
             {editing ? 'Guardar' : 'Editar'}
           </button>
         </div>
-      </header>
+      </div>
 
       <div className="flex-1 space-y-4 px-4 pt-4">
         {/* Supplier Info */}
@@ -312,7 +324,65 @@ export default function SupplierDetail({ currentUser }: Props) {
             <p className="py-4 text-center text-sm text-gray-400">Sin reuniones aún</p>
           )}
         </div>
+
+        {/* Productos */}
+        <SupplierProductsTable
+          products={supplierProducts}
+          supplierName={supplier.name}
+          supplierStand={supplier.stand}
+          sortCol={prodSortCol}
+          sortAsc={prodSortAsc}
+          onSort={(col) => {
+            if (col === prodSortCol) setProdSortAsc(!prodSortAsc)
+            else { setProdSortCol(col); setProdSortAsc(true) }
+          }}
+          onSelectProduct={setSelectedProduct}
+        />
       </div>
+
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setSelectedProduct(null)}>
+          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5" onClick={e => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-800">Detalle del producto</h3>
+              <button onClick={() => setSelectedProduct(null)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">&#10005;</button>
+            </div>
+            <div className="space-y-3">
+              <StatusBadge status={(selectedProduct as { status?: ProductStatus }).status} />
+              <div className="grid grid-cols-2 gap-3">
+                <div><p className="text-xs font-medium text-gray-500">Tipo de producto</p><p className="text-sm text-gray-800">{selectedProduct.product_type || '—'}</p></div>
+                <div><p className="text-xs font-medium text-gray-500">Item / Model</p><p className="text-sm text-gray-800">{selectedProduct.item_model || '—'}</p></div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><p className="text-xs font-medium text-gray-500">Precio</p><p className="text-sm text-gray-800">{selectedProduct.price ? `$${selectedProduct.price}` : '—'}</p></div>
+                <div><p className="text-xs font-medium text-gray-500">Target</p><p className="text-sm text-gray-800">{selectedProduct.target_price ? `$${selectedProduct.target_price}` : '—'}</p></div>
+                <div><p className="text-xs font-medium text-gray-500">MOQ</p><p className="text-sm text-gray-800">{selectedProduct.moq || '—'}</p></div>
+              </div>
+              {selectedProduct.features && <div><p className="text-xs font-medium text-gray-500">Features</p><p className="text-sm text-gray-800 whitespace-pre-wrap">{selectedProduct.features}</p></div>}
+              {selectedProduct.options && <div><p className="text-xs font-medium text-gray-500">Options</p><p className="text-sm text-gray-800 whitespace-pre-wrap">{selectedProduct.options}</p></div>}
+              {selectedProduct.observations && <div><p className="text-xs font-medium text-gray-500">Observaciones</p><p className="text-sm text-gray-800 whitespace-pre-wrap">{selectedProduct.observations}</p></div>}
+              {selectedProduct.photos && selectedProduct.photos.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-medium text-gray-500">Fotos ({selectedProduct.photos.length})</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedProduct.photos.map((url: string, i: number) => (
+                      <img key={i} src={url} alt={`Foto ${i + 1}`} className="h-20 w-20 cursor-pointer rounded-lg border border-gray-200 object-cover hover:opacity-80" onClick={() => setEnlargedPhoto(url)} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enlarged Photo */}
+      {enlargedPhoto && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80" onClick={() => setEnlargedPhoto(null)}>
+          <img src={enlargedPhoto} alt="Enlarged" className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain" />
+        </div>
+      )}
 
       {/* New Meeting Button */}
       <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white px-4 py-3 shadow-lg">
@@ -356,6 +426,120 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between gap-4">
       <span className="text-gray-400">{label}</span>
       <span className="text-right text-gray-700">{value}</span>
+    </div>
+  )
+}
+
+interface SupplierProduct {
+  id: string
+  meeting_id: string
+  product_type: string
+  item_model: string
+  price: number | null
+  price_currency: string
+  target_price: number | null
+  features: string
+  moq: number | null
+  options: string
+  sample_status: SampleStatus
+  sample_units: number | null
+  observations: string
+  photos: string[]
+  status: ProductStatus
+  created_at: string
+}
+
+function SupplierProductsTable({
+  products,
+  sortCol,
+  sortAsc,
+  onSort,
+  onSelectProduct,
+}: {
+  products: SupplierProduct[] | undefined
+  supplierName: string
+  supplierStand: string
+  sortCol: string
+  sortAsc: boolean
+  onSort: (col: string) => void
+  onSelectProduct: (p: SupplierProduct) => void
+}) {
+  if (!products || products.length === 0) {
+    return (
+      <div className="rounded-xl bg-white p-4 shadow-sm">
+        <h2 className="mb-3 text-sm font-semibold text-gray-700">Productos (0)</h2>
+        <p className="py-4 text-center text-sm text-gray-400">Sin productos capturados</p>
+      </div>
+    )
+  }
+
+  const sorted = [...products].sort((a, b) => {
+    let cmp = 0
+    switch (sortCol) {
+      case 'product_type': cmp = (a.product_type || '').localeCompare(b.product_type || ''); break
+      case 'item_model': cmp = (a.item_model || '').localeCompare(b.item_model || ''); break
+      case 'price': cmp = (a.price || 0) - (b.price || 0); break
+      case 'target_price': cmp = (a.target_price || 0) - (b.target_price || 0); break
+      case 'moq': cmp = (a.moq || 0) - (b.moq || 0); break
+      case 'features': cmp = (a.features || '').localeCompare(b.features || ''); break
+      case 'sample_status': cmp = a.sample_status.localeCompare(b.sample_status); break
+      case 'status': cmp = (a.status || '').localeCompare(b.status || ''); break
+    }
+    return sortAsc ? cmp : -cmp
+  })
+
+  const arrow = (col: string) => sortCol === col ? (sortAsc ? ' \u2191' : ' \u2193') : ''
+  const thBase = 'px-2 py-2 font-semibold text-gray-500 cursor-pointer whitespace-nowrap hover:text-primary'
+
+  return (
+    <div className="rounded-xl bg-white p-4 shadow-sm">
+      <h2 className="mb-3 text-sm font-semibold text-gray-700">
+        Productos ({products.length})
+      </h2>
+      <div className="-mx-4 overflow-x-auto">
+        <table className="w-full min-w-[700px] text-xs">
+          <thead>
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className={`${thBase} text-left`} onClick={() => onSort('product_type')}>Tipo{arrow('product_type')}</th>
+              <th className={`${thBase} text-left`} onClick={() => onSort('item_model')}>Item/Model{arrow('item_model')}</th>
+              <th className={`${thBase} text-right`} onClick={() => onSort('price')}>Precio{arrow('price')}</th>
+              <th className={`${thBase} text-right`} onClick={() => onSort('target_price')}>Target{arrow('target_price')}</th>
+              <th className={`${thBase} text-right`} onClick={() => onSort('moq')}>MOQ{arrow('moq')}</th>
+              <th className={`${thBase} text-left`} onClick={() => onSort('features')}>Features{arrow('features')}</th>
+              <th className={`${thBase} text-center`} onClick={() => onSort('sample_status')}>Sample{arrow('sample_status')}</th>
+              <th className={`${thBase} text-center`} onClick={() => onSort('status')}>Estado{arrow('status')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map(p => (
+              <tr
+                key={p.id}
+                onClick={() => onSelectProduct(p)}
+                className="cursor-pointer border-b border-gray-100 bg-white hover:bg-blue-50"
+              >
+                <td className="px-2 py-2.5 text-gray-600">{p.product_type || '—'}</td>
+                <td className="px-2 py-2.5 font-medium text-gray-800">{p.item_model || '—'}</td>
+                <td className="px-2 py-2.5 text-right text-gray-600">{p.price ? `$${p.price}` : '—'}</td>
+                <td className="px-2 py-2.5 text-right text-gray-600">{p.target_price ? `$${p.target_price}` : '—'}</td>
+                <td className="px-2 py-2.5 text-right text-gray-600">{p.moq || '—'}</td>
+                <td className="px-2 py-2.5 text-gray-500 max-w-[150px] truncate">{p.features || '—'}</td>
+                <td className="px-2 py-2.5 text-center">
+                  {p.sample_status === 'collected' ? (
+                    <span className="text-green-600 font-bold">Recogido</span>
+                  ) : p.sample_status === 'pending' ? (
+                    <span className="text-yellow-600">Pdte</span>
+                  ) : (
+                    <span className="text-gray-300">No</span>
+                  )}
+                </td>
+                <td className="px-2 py-2.5 text-center">
+                  <StatusBadge status={p.status} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

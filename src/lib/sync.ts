@@ -293,6 +293,7 @@ function toSupabaseProduct(p: Product) {
     sample_units: p.sample_units,
     observations: p.observations,
     photos: p.photos,
+    status: p.status,
     created_at: p.created_at,
   }
 }
@@ -313,6 +314,7 @@ function fromSupabaseProduct(r: Record<string, unknown>): Product {
     sample_units: (r.sample_units as number) ?? null,
     observations: (r.observations as string) || '',
     photos: (r.photos as string[]) || [],
+    status: (r.status as Product['status']) || 'interesting',
     created_at: r.created_at as string,
   }
 }

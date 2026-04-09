@@ -204,15 +204,7 @@ export default function Settings({ currentUser }: Props) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-light">
-      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/')} className="text-lg font-bold text-primary">HK Fair</button>
-          <span className="mx-2 text-gray-300">/</span>
-          <h1 className="text-lg font-bold text-gray-800">Ajustes</h1>
-        </div>
-      </header>
-
+    <div className="flex flex-col">
       <div className="flex-1 space-y-4 px-4 py-4">
         {/* User */}
         <div className="rounded-xl bg-white p-4 shadow-sm">

@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
 import { uploadPhoto, compressImage } from '@/lib/storage'
 import { formatDate, formatTime } from '@/lib/format'
-import type { UserName, Product, SampleStatus, Supplier } from '@/types'
+import type { UserName, Product, SampleStatus, ProductStatus, Supplier } from '@/types'
 
 interface Props {
   currentUser: UserName
@@ -104,24 +104,20 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-light pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white px-4 py-3">
+    <div className="flex flex-col pb-24">
+      {/* Subheader info bar */}
+      <div className="border-b border-gray-200 bg-white px-4 py-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/')} className="text-lg font-bold text-primary">HK Fair</button>
-            <span className="mx-2 text-gray-300">/</span>
-            <div>
-              <h1 className="text-sm font-bold text-gray-800">{supplier.name}</h1>
-              <p className="text-xs text-gray-400">
-                Stand {supplier.stand} · {meeting.user_name} · {formatDate(meeting.visited_at)} {formatTime(meeting.visited_at)}
-              </p>
-            </div>
+          <div>
+            <h2 className="text-sm font-bold text-gray-800">{supplier.name}</h2>
+            <p className="text-xs text-gray-400">
+              Stand {supplier.stand} · {meeting.user_name} · {formatDate(meeting.visited_at)} {formatTime(meeting.visited_at)}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {saved && (
               <span className="rounded-full bg-green-50 px-2 py-1 text-xs text-green-600">
-                Guardado ✓
+                Guardado
               </span>
             )}
             {isSaved && !isEditable && (
@@ -134,7 +130,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
             )}
           </div>
         </div>
-      </header>
+      </div>
 
       <div className={`flex-1 space-y-4 px-4 pt-4 ${!isEditable ? 'pointer-events-none opacity-75' : ''}`}>
         {/* Read-only banner */}
@@ -442,6 +438,7 @@ function ProductFormModal({
   const [sampleUnits, setSampleUnits] = useState(product?.sample_units?.toString() || '1')
   const [observations, setObservations] = useState(product?.observations || '')
   const [photos, setPhotos] = useState<string[]>(product?.photos || [])
+  const [status, setStatus] = useState<ProductStatus>(product?.status || 'interesting')
 
   async function handleSave() {
     const data = {
@@ -457,6 +454,7 @@ function ProductFormModal({
       sample_units: sampleUnits ? parseInt(sampleUnits) : null,
       observations: observations.trim(),
       photos,
+      status,
     }
 
     if (product) {
@@ -522,6 +520,29 @@ function ProductFormModal({
                     sampleStatus === val
                       ? 'bg-primary text-white'
                       : 'bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Estado */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Estado</label>
+            <div className="flex gap-2">
+              {([
+                ['discarded', 'DESCARTADO', 'bg-red-500 text-white', 'bg-red-50 text-red-500 border-red-200'],
+                ['interesting', 'INTERESANTE', 'bg-orange-500 text-white', 'bg-orange-50 text-orange-500 border-orange-200'],
+                ['selected', 'SELECCIONADO', 'bg-green-500 text-white', 'bg-green-50 text-green-500 border-green-200'],
+              ] as const).map(([val, label, activeCls, inactiveCls]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setStatus(val)}
+                  className={`flex-1 rounded-lg border py-2.5 text-xs font-bold transition-colors ${
+                    status === val ? activeCls : inactiveCls
                   }`}
                 >
                   {label}
