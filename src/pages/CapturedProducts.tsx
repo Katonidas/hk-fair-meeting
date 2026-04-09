@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
 import { normalize } from '@/lib/normalize'
+import { uploadPhoto } from '@/lib/storage'
 import type { ProductStatus, SampleStatus } from '@/types'
 
 type SortCol = 'supplierName' | 'supplierStand' | 'product_type' | 'item_model' | 'price' | 'target_price' | 'features' | 'moq' | 'options' | 'sample_status' | 'status'
@@ -298,6 +299,11 @@ export function ProductDetailModal({
   const [currentStatus, setCurrentStatus] = useState<ProductStatus>(product.status)
   const [sampleStatus, setSampleStatus] = useState(product.sample_status)
   const [sampleUnits, setSampleUnits] = useState(product.sample_units?.toString() || '1')
+  const [photos, setPhotos] = useState<string[]>(product.photos || [])
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
 
   async function handleStatusChange(newStatus: ProductStatus) {
     setCurrentStatus(newStatus)
@@ -323,8 +329,33 @@ export function ProductDetailModal({
       features: features.trim(),
       options: options.trim(),
       observations: observations.trim(),
+      photos,
     })
     setEditing(false)
+  }
+
+  async function handleAddPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingPhoto(true)
+    try {
+      const url = await uploadPhoto(file, 'products')
+      if (url) {
+        const updated = [...photos, url]
+        setPhotos(updated)
+        await db.products.update(product.id, { photos: updated })
+      }
+    } finally {
+      setUploadingPhoto(false)
+      if (cameraRef.current) cameraRef.current.value = ''
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  async function handleRemovePhoto(index: number) {
+    const updated = photos.filter((_, i) => i !== index)
+    setPhotos(updated)
+    await db.products.update(product.id, { photos: updated })
   }
 
   const fieldCls = 'w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-primary focus:outline-none'
@@ -505,22 +536,59 @@ export function ProductDetailModal({
           )}
 
           {/* Photos */}
-          {product.photos && product.photos.length > 0 && (
-            <div>
-              <p className="mb-2 text-xs font-medium text-gray-500">Fotos ({product.photos.length})</p>
-              <div className="flex flex-wrap gap-3">
-                {product.photos.map((url, i) => (
-                  <img
-                    key={i}
-                    src={url}
-                    alt={`Foto ${i + 1}`}
-                    className="h-32 w-32 cursor-pointer rounded-lg border border-gray-200 object-cover hover:opacity-80"
-                    onClick={() => onPhotoClick(url)}
-                  />
+          <div>
+            <p className="mb-2 text-xs font-medium text-gray-500">Fotos ({photos.length})</p>
+            {photos.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-3">
+                {photos.map((url, i) => (
+                  <div key={i} className="relative">
+                    <img
+                      src={url}
+                      alt={`Foto ${i + 1}`}
+                      className="h-32 w-32 cursor-pointer rounded-lg border border-gray-200 object-cover hover:opacity-80"
+                      onClick={() => onPhotoClick(url)}
+                    />
+                    {editing && (
+                      <button
+                        onClick={() => handleRemovePhoto(i)}
+                        className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs text-white shadow"
+                      >x</button>
+                    )}
+                  </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+            {editing && (
+              <div className="flex gap-2">
+                {uploadingPhoto ? (
+                  <p className="text-xs text-gray-400">Subiendo foto...</p>
+                ) : (
+                  <>
+                    {isMobile ? (
+                      <>
+                        <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleAddPhoto} className="hidden" />
+                        <button onClick={() => cameraRef.current?.click()}
+                          className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary">
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                          Foto
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <input ref={cameraRef} type="file" accept="image/*" onChange={handleAddPhoto} className="hidden" />
+                      </>
+                    )}
+                    <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.webp" onChange={handleAddPhoto} className="hidden" />
+                    <button onClick={() => fileRef.current?.click()}
+                      className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-500 hover:border-primary hover:text-primary">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                      Subir
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Delete button */}
           <button
