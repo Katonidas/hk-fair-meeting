@@ -10,6 +10,7 @@ import SupplierDetail from '@/pages/SupplierDetail'
 import Settings from '@/pages/Settings'
 import SearchedProducts from '@/pages/SearchedProducts'
 import CapturedProducts from '@/pages/CapturedProducts'
+import RoutePlanner from '@/pages/RoutePlanner'
 
 export default function App() {
   const { currentUser, setCurrentUser, clearUser } = useCurrentUser()
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/supplier/:id" element={<SupplierDetail currentUser={currentUser} />} />
         <Route path="/searched-products" element={<SearchedProducts />} />
         <Route path="/captured-products" element={<CapturedProducts />} />
+        <Route path="/route-planner" element={<RoutePlanner />} />
         <Route path="/settings" element={<Settings currentUser={currentUser} />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
