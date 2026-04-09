@@ -9,8 +9,27 @@ let lastSyncStatus: SyncStatus = 'pending'
 const listeners = new Set<(status: SyncStatus) => void>()
 
 // Tombstones: track deleted IDs so pull doesn't restore them
-const deletedMeetingIds = new Set<string>()
-const deletedProductIds = new Set<string>()
+// Persisted to localStorage to survive page refreshes
+const TOMBSTONE_KEY = 'hk-fair-tombstones'
+
+function loadTombstones(): { meetings: string[]; products: string[] } {
+  try {
+    const raw = localStorage.getItem(TOMBSTONE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore */ }
+  return { meetings: [], products: [] }
+}
+
+function saveTombstones() {
+  localStorage.setItem(TOMBSTONE_KEY, JSON.stringify({
+    meetings: [...deletedMeetingIds],
+    products: [...deletedProductIds],
+  }))
+}
+
+const saved = loadTombstones()
+const deletedMeetingIds = new Set<string>(saved.meetings)
+const deletedProductIds = new Set<string>(saved.products)
 
 export function onSyncStatusChange(fn: (status: SyncStatus) => void) {
   listeners.add(fn)
@@ -66,6 +85,9 @@ export async function deleteMeeting(meetingId: string): Promise<void> {
     deletedProductIds.add(p.id)
   }
 
+  // Persist tombstones
+  saveTombstones()
+
   // Delete locally
   await db.products.where('meeting_id').equals(meetingId).delete()
   await db.meetings.delete(meetingId)
@@ -119,6 +141,13 @@ async function pushMeetings() {
   }
 }
 
+// Track last-pushed product hashes to avoid redundant pushes
+const pushedProductHashes = new Map<string, string>()
+
+function productHash(p: Product): string {
+  return `${p.product_type}|${p.item_model}|${p.price}|${p.target_price}|${p.status}|${p.sample_status}|${p.features}|${p.photos?.length}`
+}
+
 async function pushProducts() {
   const allProducts = await db.products.toArray()
   const localMeetings = await db.meetings.toArray()
@@ -127,6 +156,11 @@ async function pushProducts() {
   for (const p of allProducts) {
     // Push if product has a valid meeting OR a direct supplier_id (manual product)
     if (!p.supplier_id && !meetingIds.has(p.meeting_id)) continue
+
+    // Skip if product hasn't changed since last push
+    const hash = productHash(p)
+    if (pushedProductHashes.get(p.id) === hash) continue
+
     const row = toSupabaseProduct(p)
     const { error } = await supabase.from('products').upsert(row, { onConflict: 'id' })
     if (error) {
@@ -134,10 +168,13 @@ async function pushProducts() {
       if (error.message?.includes('supplier_id')) {
         const { supplier_id: _, ...rowWithout } = row as Record<string, unknown>
         const { error: e2 } = await supabase.from('products').upsert(rowWithout, { onConflict: 'id' })
-        if (e2) console.error('Push product error (retry):', p.id, e2)
+        if (!e2) pushedProductHashes.set(p.id, hash)
+        else console.error('Push product error (retry):', p.id, e2)
       } else {
         console.error('Push product error:', p.id, error)
       }
+    } else {
+      pushedProductHashes.set(p.id, hash)
     }
   }
 }
@@ -205,10 +242,13 @@ async function pullProducts() {
     // Skip products that were deleted locally
     if (deletedProductIds.has(remote.id)) continue
     // Skip products whose meeting was deleted
-    if (deletedMeetingIds.has(remote.meeting_id)) continue
+    if (remote.meeting_id && deletedMeetingIds.has(remote.meeting_id)) continue
 
     const local = await db.products.get(remote.id)
     if (!local) {
+      await db.products.put(fromSupabaseProduct(remote))
+    } else if (remote.updated_at && (!local.created_at || remote.updated_at > local.created_at)) {
+      // Update existing products with newer remote data
       await db.products.put(fromSupabaseProduct(remote))
     }
   }
@@ -223,7 +263,7 @@ async function pullProductPhotos() {
 
   for (const remote of data) {
     const local = await db.product_photos.get(remote.id)
-    if (!local) {
+    if (!local || (remote.created_at && remote.created_at > (local.created_at || ''))) {
       await db.product_photos.put({
         id: remote.id,
         product_id: remote.product_id,
