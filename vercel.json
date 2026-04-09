@@ -1,5 +1,12 @@
 {
   "rewrites": [
-    { "source": "/((?!assets/).*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/((?!assets/|api/).*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/backup",
+      "schedule": "0 7,19 * * *"
+    }
   ]
 }
