@@ -70,11 +70,11 @@ export default function Home({ currentUser }: Props) {
         normalize(s.product_type).includes(q) ||
         normalize(s.assigned_person).includes(q) ||
         normalize(s.contact_person || '').includes(q) ||
-        (q === 'imprescindible' && s.relevance === 1) ||
-        (q === 'importante' && s.relevance === 2) ||
-        (q === 'opcional' && s.relevance === 3) ||
-        ((q === 'nuevo' || q === 'si' || q === 'new') && s.is_new) ||
-        ((q === 'no nuevo' || q === 'existente') && !s.is_new)
+        ('imprescindible'.includes(q) && s.relevance === 1) ||
+        ('importante'.includes(q) && s.relevance === 2) ||
+        ('opcional'.includes(q) && s.relevance === 3) ||
+        (('nuevo'.includes(q) || q === 'si') && s.is_new) ||
+        ('existente'.includes(q) && !s.is_new)
       )
     }
     if (productFilter) {
@@ -162,7 +162,7 @@ export default function Home({ currentUser }: Props) {
             <div className="mb-3 flex gap-2">
               <input
                 type="text"
-                placeholder="Buscar proveedor o stand..."
+                placeholder="Buscar: nombre, stand, tipo, asignado, imprescindible/importante/opcional, nuevo..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm focus:border-primary focus:outline-none"

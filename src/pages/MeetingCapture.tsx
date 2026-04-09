@@ -290,7 +290,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
               }}
               className="flex-1 rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
             >
-              Previsualizar EMAIL
+              Ver y enviar EMAIL
             </button>
           </div>
         ) : (
@@ -305,7 +305,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
               onClick={() => navigate(`/meeting/${id}/email`)}
               className="flex-1 rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
             >
-              Previsualizar EMAIL
+              Ver y enviar EMAIL
             </button>
           </div>
         )}
