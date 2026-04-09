@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as XLSX from 'xlsx'
+import JSZip from 'jszip'
 import { db } from '@/lib/db'
 import { normalize } from '@/lib/normalize'
 import { uploadPhoto } from '@/lib/storage'
@@ -99,9 +100,10 @@ export default function CapturedProducts() {
     return sortAsc ? cmp : -cmp
   }) : []
 
-  async function handleExport() {
-    if (!sorted || sorted.length === 0) return
-    const rows = sorted.map(p => ({
+  const [exporting, setExporting] = useState(false)
+
+  function buildExcelRows(items: EnrichedProduct[]) {
+    return items.map(p => ({
       'Proveedor': p.supplierName,
       'Stand': p.supplierStand,
       'Tipo producto': p.product_type,
@@ -117,9 +119,80 @@ export default function CapturedProducts() {
       'Observaciones': p.observations,
       'Estado': p.status,
     }))
+  }
+
+  function sanitize(s: string) {
+    return s.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50)
+  }
+
+  async function handleExport() {
+    if (!sorted || sorted.length === 0) return
+    const rows = buildExcelRows(sorted)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Productos Capturados')
     XLSX.writeFile(wb, `productos-capturados-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
+  async function handleExportWithPhotos() {
+    if (!sorted || sorted.length === 0) return
+    setExporting(true)
+    try {
+      const zip = new JSZip()
+      const photosFolder = zip.folder('fotos')!
+
+      // Generate Excel
+      const rows = buildExcelRows(sorted)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Productos Capturados')
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+      zip.file(`productos-capturados-${new Date().toISOString().slice(0, 10)}.xlsx`, excelBuffer)
+
+      // Download and add photos
+      for (const p of sorted) {
+        if (!p.photos || p.photos.length === 0) continue
+        const itemName = sanitize(p.item_model || p.product_type || 'producto')
+        const supplierName = sanitize(p.supplierName || 'proveedor')
+
+        for (let i = 0; i < p.photos.length; i++) {
+          const photoUrl = p.photos[i]
+          const photoNum = i + 1
+          const fileName = `${itemName}-${supplierName}-${photoNum}.jpg`
+
+          try {
+            if (photoUrl.startsWith('data:')) {
+              // Base64 data URL — extract the binary data
+              const base64 = photoUrl.split(',')[1]
+              photosFolder.file(fileName, base64, { base64: true })
+            } else {
+              // Remote URL — fetch it
+              const response = await fetch(photoUrl)
+              if (response.ok) {
+                const blob = await response.blob()
+                photosFolder.file(fileName, blob)
+              }
+            }
+          } catch (err) {
+            console.error(`Error downloading photo for ${p.item_model}:`, err)
+          }
+        }
+      }
+
+      // Generate and download ZIP
+      const content = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(content)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `productos-con-fotos-${new Date().toISOString().slice(0, 10)}.zip`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Export with photos error:', err)
+      alert('Error al exportar. Inténtalo de nuevo.')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const arrow = (col: SortCol) => sortCol === col ? (sortAsc ? ' \u2191' : ' \u2193') : ''
@@ -147,6 +220,13 @@ export default function CapturedProducts() {
             className="cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-3 text-xs font-medium text-gray-600"
           >
             Exportar Excel
+          </button>
+          <button
+            onClick={handleExportWithPhotos}
+            disabled={exporting}
+            className="cursor-pointer rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-xs font-medium text-blue-700 disabled:opacity-50"
+          >
+            {exporting ? 'Exportando...' : 'Excel + Fotos (ZIP)'}
           </button>
         </div>
 

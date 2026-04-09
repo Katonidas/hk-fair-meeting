@@ -136,7 +136,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
         </div>
       </div>
 
-      <div className={`flex-1 space-y-4 px-4 pt-4 ${!isEditable ? 'pointer-events-none opacity-75' : ''}`}>
+      <div className="flex-1 space-y-4 px-4 pt-4">
         {/* Read-only banner */}
         {isSaved && !isEditable && (
           <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-center text-xs text-blue-700">
@@ -145,7 +145,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
         )}
 
         {/* Meeting Script */}
-        <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+        <div className={`rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 ${!isEditable ? 'opacity-75' : ''}`}>
           <p className="text-xs font-semibold text-primary">GUIÓN DE REUNIÓN</p>
           <p className="mt-1 text-xs text-primary/80">
             1. Incidencias / Problemas &nbsp;→&nbsp; 2. Condiciones y Términos &nbsp;→&nbsp; 3. Ofertas de Productos &nbsp;→&nbsp; 4. Muestras
@@ -153,7 +153,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
         </div>
 
         {/* Photos + Contact */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
+        <div className={`rounded-xl bg-white p-4 shadow-sm ${!isEditable ? 'pointer-events-none opacity-75' : ''}`}>
           <div className="mb-3 flex gap-3">
             {/* Business Card Photo */}
             <div className="flex-1">
@@ -205,7 +205,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
         </div>
 
         {/* Urgent Notes */}
-        <div className="rounded-xl border border-urgent-border bg-urgent p-4">
+        <div className={`rounded-xl border border-urgent-border bg-urgent p-4 ${!isEditable ? 'pointer-events-none opacity-75' : ''}`}>
           <label className="mb-2 block text-sm font-semibold text-amber-800">
             Notas urgentes / puntos críticos
           </label>
@@ -218,18 +218,20 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
           />
         </div>
 
-        {/* Products */}
+        {/* Products — always interactive for viewing/clicking */}
         <div className="rounded-xl bg-white shadow-sm">
           <div className="mb-3 flex items-center justify-between px-4 pt-4">
             <h2 className="text-sm font-semibold text-gray-700">
               Productos ({products?.length || 0})
             </h2>
-            <button
-              onClick={() => { setEditingProduct(null); setShowProductForm(true) }}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-light"
-            >
-              + Añadir
-            </button>
+            {isEditable && (
+              <button
+                onClick={() => { setEditingProduct(null); setShowProductForm(true) }}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-light"
+              >
+                + Añadir
+              </button>
+            )}
           </div>
 
           {products && products.length > 0 ? (
@@ -249,7 +251,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
         </div>
 
         {/* Other Notes - at the bottom */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
+        <div className={`rounded-xl bg-white p-4 shadow-sm ${!isEditable ? 'pointer-events-none opacity-75' : ''}`}>
           <label className="mb-2 block text-sm font-semibold text-gray-700">
             Texto adicional / Observaciones
           </label>
@@ -350,7 +352,7 @@ function ProductsTable({
 
   return (
     <>
-      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <div className="-mx-4 overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }}>
         <table className="w-full text-xs" style={{ minWidth: 700 }}>
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">

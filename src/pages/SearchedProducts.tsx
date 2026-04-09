@@ -138,8 +138,8 @@ export default function SearchedProducts() {
   }
 
   async function handleExport() {
-    const all = await db.searched_products.toArray()
-    const rows = all.map(p => ({
+    if (!products || products.length === 0) return
+    const rows = products.map(p => ({
       'MARCA': p.brand,
       'TIPO DE PRODUCTO': p.product_type,
       'REF / SEGMENTO': p.ref_segment,

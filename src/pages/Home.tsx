@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
+import { deleteMeeting } from '@/lib/sync'
 import { formatDate, formatTime } from '@/lib/format'
 import { normalize } from '@/lib/normalize'
 import { USERS } from '@/lib/constants'
@@ -145,14 +146,17 @@ export default function Home({ currentUser }: Props) {
                 + Nuevo proveedor
               </button>
               <button
-                onClick={async () => {
-                  const all = await db.suppliers.toArray()
-                  const rows = all.map(s => ({
+                onClick={() => {
+                  if (!suppliers || suppliers.length === 0) return
+                  const rows = suppliers.map(s => ({
                     'Nombre': s.name, 'Stand': s.stand, 'Tipo producto': s.product_type,
-                    'Persona asignada': s.assigned_person, 'Emails': s.emails.join(', '),
-                    'Teléfono': s.phone, 'Relevancia': s.relevance, 'Visitado': s.visited ? 'Sí' : 'No',
-                    'Nuevo': s.is_new ? 'Sí' : 'No', 'Temas pendientes': s.pending_topics,
-                    'Notas proveedor': s.supplier_notes,
+                    'Persona asignada': s.assigned_person, 'Contacto': s.contact_person,
+                    'Teléfono': (s as Record<string, unknown>).phone || '',
+                    'Relevancia': s.relevance === 1 ? 'IMPRESCINDIBLE' : s.relevance === 2 ? 'IMPORTANTE' : 'OPCIONAL',
+                    'Nuevo': s.is_new ? 'Sí' : 'No',
+                    'V.Feria': s.visited_feria ? 'Sí' : 'No',
+                    'V.Hotel': s.visited_hotel ? 'Sí' : 'No',
+                    'Productos': s.productCount,
                   }))
                   const wb = XLSX.utils.book_new()
                   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Proveedores')
@@ -395,8 +399,7 @@ function MeetingsList({
 
   async function handleDelete(meetingId: string) {
     if (!window.confirm('¿Eliminar esta reunión y todos sus productos?')) return
-    await db.products.where('meeting_id').equals(meetingId).delete()
-    await db.meetings.delete(meetingId)
+    await deleteMeeting(meetingId)
     setOpenMenu(null)
   }
 

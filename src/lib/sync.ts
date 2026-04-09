@@ -8,6 +8,10 @@ let syncInProgress = false
 let lastSyncStatus: SyncStatus = 'pending'
 const listeners = new Set<(status: SyncStatus) => void>()
 
+// Tombstones: track deleted IDs so pull doesn't restore them
+const deletedMeetingIds = new Set<string>()
+const deletedProductIds = new Set<string>()
+
 export function onSyncStatusChange(fn: (status: SyncStatus) => void) {
   listeners.add(fn)
   return () => listeners.delete(fn)
@@ -47,6 +51,37 @@ export async function syncAll(): Promise<void> {
     setStatus('error')
   } finally {
     syncInProgress = false
+  }
+}
+
+// ── Delete from both local and remote ──
+
+export async function deleteMeeting(meetingId: string): Promise<void> {
+  // Track as deleted so pull won't restore
+  deletedMeetingIds.add(meetingId)
+
+  // Get products for this meeting before deleting
+  const products = await db.products.where('meeting_id').equals(meetingId).toArray()
+  for (const p of products) {
+    deletedProductIds.add(p.id)
+  }
+
+  // Delete locally
+  await db.products.where('meeting_id').equals(meetingId).delete()
+  await db.meetings.delete(meetingId)
+
+  // Delete from Supabase if configured and online
+  if (isSupabaseConfigured() && navigator.onLine) {
+    try {
+      // Delete products first (FK constraint)
+      for (const p of products) {
+        await supabase.from('product_photos').delete().eq('product_id', p.id)
+        await supabase.from('products').delete().eq('id', p.id)
+      }
+      await supabase.from('meetings').delete().eq('id', meetingId)
+    } catch (err) {
+      console.error('Error deleting from Supabase:', err)
+    }
   }
 }
 
@@ -141,6 +176,9 @@ async function pullMeetings() {
   if (error || !data) return
 
   for (const remote of data) {
+    // Skip meetings that were deleted locally
+    if (deletedMeetingIds.has(remote.id)) continue
+
     const local = await db.meetings.get(remote.id)
     if (!local || remote.updated_at > local.updated_at) {
       await db.meetings.put(fromSupabaseMeeting(remote))
@@ -156,6 +194,11 @@ async function pullProducts() {
   if (error || !data) return
 
   for (const remote of data) {
+    // Skip products that were deleted locally
+    if (deletedProductIds.has(remote.id)) continue
+    // Skip products whose meeting was deleted
+    if (deletedMeetingIds.has(remote.meeting_id)) continue
+
     const local = await db.products.get(remote.id)
     if (!local) {
       await db.products.put(fromSupabaseProduct(remote))

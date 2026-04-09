@@ -1,6 +1,5 @@
 import type { Meeting, Supplier, Product } from '@/types'
 import { getTerms, getQOS } from './settings'
-import { translateToEnglish } from './translate'
 
 export function generateEmailSubject(supplier: Supplier): string {
   return `${supplier.name} - APPROX - Meeting HK Fair`
@@ -27,7 +26,7 @@ export function generateEmailBody(
     L.push('⚠️  URGENT NOTES')
     L.push('════════════════════════════════════════')
     L.push('')
-    L.push(translateToEnglish(meeting.urgent_notes.trim()))
+    L.push(meeting.urgent_notes.trim())
     L.push('')
   }
 
@@ -65,8 +64,8 @@ export function generateEmailBody(
       L.push(`  ITEM/MODEL:   ${p.item_model || '—'}`)
       L.push(`  PRICE:        ${p.price != null ? `$${p.price.toFixed(2)} ${p.price_currency}` : '—'}`)
       L.push(`  MOQ:          ${p.moq || '—'}`)
-      L.push(`  FEATURES:     ${translateToEnglish(p.features) || '—'}`)
-      L.push(`  OPTIONS:      ${translateToEnglish(p.options) || '—'}`)
+      L.push(`  FEATURES:     ${p.features || '—'}`)
+      L.push(`  OPTIONS:      ${p.options || '—'}`)
 
       const sampleText = {
         collected: 'YES (collected)',
@@ -79,7 +78,7 @@ export function generateEmailBody(
         L.push(`  >> WE NEED THIS PRICE: $${p.target_price.toFixed(2)} - PLEASE CHECK IT <<`)
       }
       if (p.observations) {
-        L.push(`  NOTES:        ${translateToEnglish(p.observations)}`)
+        L.push(`  NOTES:        ${p.observations}`)
       }
       L.push('')
     }
@@ -103,7 +102,7 @@ export function generateEmailBody(
     L.push('ADDITIONAL NOTES')
     L.push('————————————————————————————————————————')
     L.push('')
-    L.push(translateToEnglish(meeting.other_notes.trim()))
+    L.push(meeting.other_notes.trim())
     L.push('')
   }
 

@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
 import { getCCEmails } from '@/lib/constants'
 import { generateEmailSubject, generateEmailBody, buildMailtoUrl } from '@/lib/emailGenerator'
+import { translateAndCorrect } from '@/lib/translate'
 import type { UserName } from '@/types'
 
 interface Props {
@@ -28,6 +29,9 @@ export default function MeetingEmail({ currentUser }: Props) {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [initialized, setInitialized] = useState(false)
+  const [translating, setTranslating] = useState(false)
+  const [translateError, setTranslateError] = useState('')
+  const [translateSuccess, setTranslateSuccess] = useState(false)
 
   useEffect(() => {
     if (meeting && supplier && products && !initialized) {
@@ -66,6 +70,30 @@ export default function MeetingEmail({ currentUser }: Props) {
         updated_at: now,
         updated_by: currentUser,
       })
+    }
+  }
+
+  async function handleTranslate() {
+    setTranslating(true)
+    setTranslateError('')
+    setTranslateSuccess(false)
+    try {
+      const translated = await translateAndCorrect(body)
+      setBody(translated)
+      // Also translate subject if it has Spanish
+      const translatedSubject = await translateAndCorrect(subject)
+      setSubject(translatedSubject)
+      setTranslateSuccess(true)
+      setTimeout(() => setTranslateSuccess(false), 3000)
+    } catch (err) {
+      if (err instanceof Error && err.message === 'NO_CONNECTION') {
+        setTranslateError('Sin conexión a Internet. No se puede traducir/corregir.')
+      } else {
+        setTranslateError('Error al traducir. Inténtalo de nuevo.')
+      }
+      setTimeout(() => setTranslateError(''), 5000)
+    } finally {
+      setTranslating(false)
     }
   }
 
@@ -121,6 +149,18 @@ export default function MeetingEmail({ currentUser }: Props) {
           />
         </div>
 
+        {/* Translate status messages */}
+        {translateError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-700">
+            {translateError}
+          </div>
+        )}
+        {translateSuccess && (
+          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-center text-sm text-green-700">
+            Texto traducido y corregido correctamente
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex flex-col gap-3 pb-6">
           <div className="flex gap-3">
@@ -129,6 +169,13 @@ export default function MeetingEmail({ currentUser }: Props) {
               className="flex-1 rounded-xl border border-gray-200 bg-white py-4 text-base font-medium text-gray-600 transition-colors hover:bg-gray-50"
             >
               Guardar borrador
+            </button>
+            <button
+              onClick={handleTranslate}
+              disabled={translating}
+              className="flex-1 rounded-xl border-2 border-blue-400 bg-blue-50 py-4 text-base font-bold text-blue-700 transition-colors hover:bg-blue-100 active:bg-blue-200 disabled:opacity-50"
+            >
+              {translating ? 'Traduciendo...' : 'TRADUCIR / CORREGIR'}
             </button>
             <button
               onClick={handleOpenEmail}

@@ -1,140 +1,82 @@
-// Basic Spanish→English translation for common trade fair terms
-// Applied to user-written fields before email generation
+// API-based translation: detects Spanish and translates to English, corrects grammar
+// Uses free Google Translate endpoint (no API key needed)
 
-const dictionary: [RegExp, string][] = [
-  // Common phrases
-  [/\bprecio especial\b/gi, 'special price'],
-  [/\bprecio muy alto\b/gi, 'price too high'],
-  [/\bprecio alto\b/gi, 'high price'],
-  [/\bbuen precio\b/gi, 'good price'],
-  [/\bmejor precio\b/gi, 'better price'],
-  [/\bprecio objetivo\b/gi, 'target price'],
-  [/\bnecesitamos\b/gi, 'we need'],
-  [/\bqueremos\b/gi, 'we want'],
-  [/\bpodemos\b/gi, 'we can'],
-  [/\bpor favor\b/gi, 'please'],
-  [/\blo antes posible\b/gi, 'as soon as possible'],
-  [/\bcuanto antes\b/gi, 'as soon as possible'],
-  [/\bbuena calidad\b/gi, 'good quality'],
-  [/\bmala calidad\b/gi, 'bad quality'],
-  [/\balta calidad\b/gi, 'high quality'],
-  [/\bfábrica propia\b/gi, 'own factory'],
-  [/\bcatálogo amplio\b/gi, 'wide catalogue'],
-  [/\bmuestra limitada\b/gi, 'limited sample'],
-  [/\bmuestra gratis\b/gi, 'free sample'],
-  [/\benvío gratis\b/gi, 'free shipping'],
-  [/\bgastos de envío\b/gi, 'shipping costs'],
-  [/\bplazo de entrega\b/gi, 'delivery time'],
-  [/\btiempo de producción\b/gi, 'production time'],
-  [/\btiempo de entrega\b/gi, 'delivery time'],
-  [/\bpago por adelantado\b/gi, 'advance payment'],
-  [/\bcondiciones de pago\b/gi, 'payment terms'],
-  [/\bfecha límite\b/gi, 'deadline'],
-  [/\bantes del viernes\b/gi, 'before Friday'],
-  [/\bantes del lunes\b/gi, 'before Monday'],
-  [/\bcontactar lunes\b/gi, 'contact on Monday'],
-  [/\bla semana que viene\b/gi, 'next week'],
-  [/\bel mes que viene\b/gi, 'next month'],
-  [/\bpendiente de\b/gi, 'pending'],
-  [/\ben espera de\b/gi, 'waiting for'],
-  [/\bconfirmar\b/gi, 'confirm'],
-  [/\breclamación\b/gi, 'complaint'],
-  [/\bincidencia\b/gi, 'issue'],
-  [/\bproblema con\b/gi, 'problem with'],
-  [/\brevisar precios\b/gi, 'review prices'],
-  [/\bcomprobar\b/gi, 'check'],
-  [/\benviar muestras\b/gi, 'send samples'],
-  [/\benviar catálogo\b/gi, 'send catalogue'],
-  [/\benviar fotos\b/gi, 'send photos'],
-  [/\benviar presupuesto\b/gi, 'send quotation'],
-  [/\benviar factura\b/gi, 'send invoice'],
+export async function translateAndCorrect(text: string): Promise<string> {
+  if (!text || !text.trim()) return text
 
-  // Single words (applied after phrases)
-  [/\bmuestras?\b/gi, 'sample(s)'],
-  [/\bproveedor\b/gi, 'supplier'],
-  [/\bproveedores\b/gi, 'suppliers'],
-  [/\bproductos?\b/gi, 'product(s)'],
-  [/\bprecios?\b/gi, 'price(s)'],
-  [/\bcalidad\b/gi, 'quality'],
-  [/\bgarantía\b/gi, 'warranty'],
-  [/\bcertificado\b/gi, 'certificate'],
-  [/\bpedido\b/gi, 'order'],
-  [/\bpedidos\b/gi, 'orders'],
-  [/\bpago\b/gi, 'payment'],
-  [/\bpagos\b/gi, 'payments'],
-  [/\benvío\b/gi, 'shipping'],
-  [/\bentrega\b/gi, 'delivery'],
-  [/\bfactura\b/gi, 'invoice'],
-  [/\bpresupuesto\b/gi, 'quotation'],
-  [/\bcolores?\b/gi, 'color(s)'],
-  [/\btamaños?\b/gi, 'size(s)'],
-  [/\bembalaje\b/gi, 'packaging'],
-  [/\bempaquetado\b/gi, 'packaging'],
-  [/\bcaja\b/gi, 'box'],
-  [/\bcajas\b/gi, 'boxes'],
-  [/\bunidades\b/gi, 'units'],
-  [/\bcantidad\b/gi, 'quantity'],
-  [/\bdescuento\b/gi, 'discount'],
-  [/\boferta\b/gi, 'offer'],
-  [/\burgente\b/gi, 'urgent'],
-  [/\bimportante\b/gi, 'important'],
-  [/\bnecesario\b/gi, 'necessary'],
-  [/\bobligatorio\b/gi, 'mandatory'],
-  [/\bopcional\b/gi, 'optional'],
-  [/\bdisponible\b/gi, 'available'],
-  [/\bno disponible\b/gi, 'not available'],
-  [/\bincluido\b/gi, 'included'],
-  [/\bno incluido\b/gi, 'not included'],
-  [/\bgratis\b/gi, 'free'],
-  [/\baceptable\b/gi, 'acceptable'],
-  [/\binaceptable\b/gi, 'unacceptable'],
-  [/\binteresante\b/gi, 'interesting'],
-  [/\bbueno\b/gi, 'good'],
-  [/\bmalo\b/gi, 'bad'],
-  [/\bbarato\b/gi, 'cheap'],
-  [/\bcaro\b/gi, 'expensive'],
-  [/\brápido\b/gi, 'fast'],
-  [/\blento\b/gi, 'slow'],
-  [/\bnuevo\b/gi, 'new'],
-  [/\bviejo\b/gi, 'old'],
-  [/\bgrande\b/gi, 'big'],
-  [/\bpequeño\b/gi, 'small'],
-  [/\bnegro\b/gi, 'black'],
-  [/\bblanco\b/gi, 'white'],
-  [/\brojo\b/gi, 'red'],
-  [/\bazul\b/gi, 'blue'],
-  [/\bverde\b/gi, 'green'],
-  [/\bamarillo\b/gi, 'yellow'],
-  [/\btambién\b/gi, 'also'],
-  [/\bademás\b/gi, 'furthermore'],
-  [/\bsin embargo\b/gi, 'however'],
-  [/\bpero\b/gi, 'but'],
-  [/\by\b/gi, 'and'],
-  [/\bo\b/gi, 'or'],
-  [/\bcon\b/gi, 'with'],
-  [/\bsin\b/gi, 'without'],
-  [/\bpara\b/gi, 'for'],
-  [/\bsobre\b/gi, 'about'],
-  [/\bmuy\b/gi, 'very'],
-  [/\bbien\b/gi, 'well'],
-  [/\bmal\b/gi, 'badly'],
-  [/\bsí\b/gi, 'yes'],
-  [/\bno\b/gi, 'no'],
-]
+  if (!navigator.onLine) {
+    throw new Error('NO_CONNECTION')
+  }
+
+  // Split into lines, translate each non-empty line individually to preserve formatting
+  const lines = text.split('\n')
+  const translatedLines: string[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    // Keep empty lines and decorative separators as-is
+    if (!trimmed || /^[═─────────────────────]+$/.test(trimmed) || /^[—━═]+$/.test(trimmed)) {
+      translatedLines.push(line)
+      continue
+    }
+
+    // Skip lines that are purely structural/template (all caps headers, email structure)
+    if (/^(Hello,|Dear .+ team,|Best regards,|PLEASE |Regarding |Please |Contact |IMPORTANT:)/.test(trimmed)) {
+      translatedLines.push(line)
+      continue
+    }
+
+    // Check if line has Spanish content
+    if (hasSpanish(trimmed)) {
+      try {
+        const translated = await googleTranslate(trimmed, 'es', 'en')
+        translatedLines.push(line.replace(trimmed, translated))
+      } catch {
+        // If translation fails for a line, keep original
+        translatedLines.push(line)
+      }
+    } else {
+      // For English text, still run through auto-detect to correct grammar
+      try {
+        const corrected = await googleTranslate(trimmed, 'auto', 'en')
+        // Only use corrected version if it's not drastically different (avoid mangling)
+        if (corrected && corrected.length > 0 && corrected.length < trimmed.length * 2) {
+          translatedLines.push(line.replace(trimmed, corrected))
+        } else {
+          translatedLines.push(line)
+        }
+      } catch {
+        translatedLines.push(line)
+      }
+    }
+  }
+
+  return translatedLines.join('\n')
+}
 
 // Detect if text contains Spanish words
 function hasSpanish(text: string): boolean {
-  const spanishIndicators = /\b(necesitamos|queremos|podemos|precio|calidad|envío|entrega|muestra|también|además|por favor|buena|mala|pedido|pago|factura|presupuesto|disponible|incluido|garantía|certificado|embalaje|urgente|importante|obligatorio|opcional|descuento|oferta|reclamación|incidencia|comprobar|confirmar|revisar)\b/i
+  const spanishIndicators = /\b(necesitamos|queremos|podemos|precio|calidad|envío|entrega|muestra|también|además|por favor|buena|mala|pedido|pago|factura|presupuesto|disponible|incluido|garantía|certificado|embalaje|urgente|importante|obligatorio|opcional|descuento|oferta|reclamación|incidencia|comprobar|confirmar|revisar|colores|tamaños|cantidad|barato|caro|nuevo|viejo|grande|pequeño|negro|blanco|rojo|azul|verde|amarillo|enviar|pendiente|mucho|poco|mejor|peor|bueno|malo|sobre|para|pero|porque|aunque|según|desde|hasta|entre|durante|después|antes|ahora|siempre|nunca|aquí|allí|donde|cuando|como|quien|cual|ese|esta|esos|estas|aquel|ellos|nosotros|vosotros|nuestro|suyo|hemos|tenemos|hacemos|podríamos|deberíamos|habría|sería|estaría|están|estamos|somos|fueron|tiene|hace|puede|debe|quiere|sabe|dice|viene|sale|pone|lleva|trae|busca|encuentra|necesita|falta|sobra)\b/i
   return spanishIndicators.test(text)
 }
 
-export function translateToEnglish(text: string): string {
-  if (!text || !text.trim()) return text
-  if (!hasSpanish(text)) return text
+// Free Google Translate endpoint
+async function googleTranslate(text: string, sourceLang: string, targetLang: string): Promise<string> {
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`
 
-  let result = text
-  for (const [pattern, replacement] of dictionary) {
-    result = result.replace(pattern, replacement)
-  }
-  return result
+  const response = await fetch(url)
+  if (!response.ok) throw new Error('Translation API error')
+
+  const data = await response.json()
+
+  // Response format: [[["translated text","original text",null,null,10]],null,"es"]
+  if (!data || !data[0]) throw new Error('Invalid response')
+
+  // Concatenate all translated segments
+  const translated = data[0]
+    .filter((segment: unknown[]) => segment && segment[0])
+    .map((segment: unknown[]) => segment[0])
+    .join('')
+
+  return translated
 }
