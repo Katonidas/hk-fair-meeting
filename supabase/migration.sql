@@ -1,7 +1,6 @@
 -- ============================================
--- HK Fair Meeting — Database Migration
--- Run this in Supabase SQL Editor:
--- https://supabase.com/dashboard → your project → SQL Editor
+-- HK Fair Meeting — FULL Database Migration
+-- Run this in Supabase SQL Editor
 -- ============================================
 
 -- Suppliers table
@@ -10,6 +9,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
   name TEXT NOT NULL,
   stand TEXT NOT NULL DEFAULT '',
   assigned_person TEXT DEFAULT '',
+  contact_person TEXT DEFAULT '',
   product_type TEXT DEFAULT '',
   emails TEXT[] DEFAULT '{}',
   phone TEXT DEFAULT '',
@@ -35,10 +35,12 @@ CREATE TABLE IF NOT EXISTS meetings (
   supplier_id UUID NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
   user_name TEXT NOT NULL,
   location TEXT DEFAULT 'feria',
+  status TEXT DEFAULT 'draft',
   visited_at TIMESTAMPTZ DEFAULT NOW(),
   urgent_notes TEXT DEFAULT '',
   other_notes TEXT DEFAULT '',
   business_card_photo_url TEXT DEFAULT '',
+  stand_photo_url TEXT DEFAULT '',
   email_generated BOOLEAN DEFAULT FALSE,
   email_sent_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -62,6 +64,7 @@ CREATE TABLE IF NOT EXISTS products (
   sample_units INTEGER,
   observations TEXT DEFAULT '',
   photos TEXT[] DEFAULT '{}',
+  status TEXT DEFAULT 'interesting',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -80,10 +83,20 @@ ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product_photos ENABLE ROW LEVEL SECURITY;
 
 -- Create permissive policies (team app, all users can read/write)
-CREATE POLICY "Allow all operations on suppliers" ON suppliers FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all operations on meetings" ON meetings FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all operations on products" ON products FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all operations on product_photos" ON product_photos FOR ALL USING (true) WITH CHECK (true);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='suppliers' AND policyname='Allow all operations on suppliers') THEN
+    CREATE POLICY "Allow all operations on suppliers" ON suppliers FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='meetings' AND policyname='Allow all operations on meetings') THEN
+    CREATE POLICY "Allow all operations on meetings" ON meetings FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='products' AND policyname='Allow all operations on products') THEN
+    CREATE POLICY "Allow all operations on products" ON products FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='product_photos' AND policyname='Allow all operations on product_photos') THEN
+    CREATE POLICY "Allow all operations on product_photos" ON product_photos FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+END $$;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_meetings_supplier ON meetings(supplier_id);
@@ -93,9 +106,6 @@ CREATE INDEX IF NOT EXISTS idx_suppliers_updated ON suppliers(updated_at);
 CREATE INDEX IF NOT EXISTS idx_meetings_updated ON meetings(updated_at);
 
 -- ============================================
--- STORAGE: After running this SQL, also create
--- a storage bucket called "photos" with public
--- access in: Storage → New Bucket →
---   Name: photos
---   Public: ON
+-- STORAGE: Also create a storage bucket:
+-- Storage → New Bucket → Name: photos → Public: ON
 -- ============================================
