@@ -219,8 +219,8 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
         </div>
 
         {/* Products */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="rounded-xl bg-white shadow-sm">
+          <div className="mb-3 flex items-center justify-between px-4 pt-4">
             <h2 className="text-sm font-semibold text-gray-700">
               Productos ({products?.length || 0})
             </h2>
@@ -233,14 +233,16 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
           </div>
 
           {products && products.length > 0 ? (
-            <ProductsTable
-              products={products}
-              onDelete={async (pid) => { await db.products.delete(pid) }}
-              supplierName={supplier.name}
-              supplierStand={supplier.stand}
-            />
+            <div className="pb-4">
+              <ProductsTable
+                products={products}
+                onDelete={async (pid) => { await db.products.delete(pid) }}
+                supplierName={supplier.name}
+                supplierStand={supplier.stand}
+              />
+            </div>
           ) : (
-            <p className="py-4 text-center text-sm text-gray-400">
+            <p className="px-4 py-4 text-center text-sm text-gray-400">
               Sin productos aún
             </p>
           )}
