@@ -46,10 +46,10 @@ export default function SupplierDetail({ currentUser }: Props) {
   const supplierProducts = useLiveQuery(async () => {
     if (!id) return []
     const supplierMeetings = await db.meetings.where('supplier_id').equals(id).toArray()
-    const meetingIds = supplierMeetings.map(m => m.id)
-    if (meetingIds.length === 0) return []
+    const meetingIds = new Set(supplierMeetings.map(m => m.id))
     const allProducts = await db.products.toArray()
-    return allProducts.filter(p => meetingIds.includes(p.meeting_id))
+    // Include products from meetings with this supplier OR with direct supplier_id
+    return allProducts.filter(p => meetingIds.has(p.meeting_id) || p.supplier_id === id)
   }, [id])
 
   const [prodSortCol, setProdSortCol] = useState<string>('product_type')

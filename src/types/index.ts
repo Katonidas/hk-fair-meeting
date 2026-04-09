@@ -56,6 +56,7 @@ export interface Meeting {
 export interface Product {
   id: string
   meeting_id: string
+  supplier_id?: string
   product_type: string
   item_model: string
   price: number | null

@@ -48,14 +48,19 @@ export default function CapturedProducts() {
     const meetingMap = new Map(savedMeetings.map(m => [m.id, m]))
 
     const allProducts = await db.products.toArray()
-    const filtered = allProducts.filter(p => meetingIds.has(p.meeting_id))
+    // Include products from saved meetings OR products with direct supplier_id (manual)
+    const filtered = allProducts.filter(p => meetingIds.has(p.meeting_id) || p.supplier_id)
 
     const allSuppliers = await db.suppliers.toArray()
     const supplierMap = new Map(allSuppliers.map(s => [s.id, s]))
 
     const enriched: EnrichedProduct[] = filtered.map(p => {
-      const meeting = meetingMap.get(p.meeting_id)
-      const supplier = meeting ? supplierMap.get(meeting.supplier_id) : undefined
+      // Try direct supplier_id first (manual products), then meeting-based
+      let supplier = p.supplier_id ? supplierMap.get(p.supplier_id) : undefined
+      if (!supplier) {
+        const meeting = meetingMap.get(p.meeting_id)
+        supplier = meeting ? supplierMap.get(meeting.supplier_id) : undefined
+      }
       return {
         ...p,
         status: p.status || 'interesting',
@@ -787,6 +792,11 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [showWebcam, setShowWebcam] = useState(false)
+  const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null)
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
 
   const filteredSuppliers = suppliers?.filter(s => {
     if (!supplierSearch) return true
@@ -811,7 +821,43 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
+      if (cameraRef.current) cameraRef.current.value = ''
     }
+  }
+
+  async function openWebcam() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } }
+      })
+      setWebcamStream(stream)
+      setShowWebcam(true)
+      setTimeout(() => {
+        if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play() }
+      }, 100)
+    } catch { /* ignore */ }
+  }
+
+  function closeWebcam() {
+    if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); setWebcamStream(null) }
+    setShowWebcam(false)
+  }
+
+  async function captureWebcam() {
+    if (!videoRef.current) return
+    const canvas = document.createElement('canvas')
+    canvas.width = videoRef.current.videoWidth
+    canvas.height = videoRef.current.videoHeight
+    canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0)
+    closeWebcam()
+    setUploading(true)
+    try {
+      const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/jpeg', 0.85))
+      if (!blob) return
+      const file = new File([blob], 'webcam.jpg', { type: 'image/jpeg' })
+      const url = await uploadPhoto(file, 'products')
+      if (url) setPhotos(prev => [...prev, url])
+    } finally { setUploading(false) }
   }
 
   async function handleSave() {
@@ -820,40 +866,10 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
     try {
       const now = new Date().toISOString()
 
-      // Find or create a "saved" meeting for this supplier
-      const existingMeetings = await db.meetings
-        .where('supplier_id').equals(supplierId)
-        .filter(m => m.status === 'saved')
-        .toArray()
-
-      let meetingId: string
-      if (existingMeetings.length > 0) {
-        meetingId = existingMeetings[0].id
-      } else {
-        // Create a minimal saved meeting
-        meetingId = uuid()
-        await db.meetings.add({
-          id: meetingId,
-          supplier_id: supplierId,
-          user_name: 'Jesús',
-          location: 'feria',
-          status: 'saved',
-          visited_at: now,
-          urgent_notes: '',
-          other_notes: '',
-          business_card_photo_url: '',
-          stand_photo_url: '',
-          email_generated: false,
-          email_sent_at: null,
-          created_at: now,
-          updated_at: now,
-          synced_at: null,
-        })
-      }
-
       await db.products.add({
         id: uuid(),
-        meeting_id: meetingId,
+        meeting_id: '',
+        supplier_id: supplierId,
         product_type: productType.trim(),
         item_model: itemModel.trim(),
         price: price ? parseFloat(price) : null,
@@ -1021,11 +1037,44 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             )}
-            <input ref={fileRef} type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" />
-            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 py-3 text-xs text-gray-400 transition-colors hover:border-primary hover:text-primary disabled:opacity-50">
-              {uploading ? 'Subiendo...' : 'Añadir fotos'}
-            </button>
+            {uploading ? (
+              <p className="py-3 text-center text-xs text-gray-400">Subiendo...</p>
+            ) : (
+              <div className="flex gap-2">
+                {isMobile ? (
+                  <>
+                    <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" />
+                    <button type="button" onClick={() => cameraRef.current?.click()}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 py-2.5 text-xs text-gray-500 hover:border-primary hover:text-primary">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      Hacer foto
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" onClick={openWebcam}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 py-2.5 text-xs text-gray-500 hover:border-primary hover:text-primary">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    Hacer foto
+                  </button>
+                )}
+                <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.webp" multiple onChange={handlePhotoUpload} className="hidden" />
+                <button type="button" onClick={() => fileRef.current?.click()}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 py-2.5 text-xs text-gray-500 hover:border-primary hover:text-primary">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                  Subir archivo
+                </button>
+              </div>
+            )}
+            {/* Webcam overlay */}
+            {showWebcam && (
+              <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/80">
+                <video ref={videoRef} autoPlay playsInline muted className="max-h-[60vh] max-w-[90vw] rounded-lg" />
+                <div className="mt-4 flex gap-3">
+                  <button onClick={captureWebcam} className="rounded-full bg-white px-6 py-3 text-sm font-bold text-gray-800">Capturar</button>
+                  <button onClick={closeWebcam} className="rounded-full bg-gray-600 px-6 py-3 text-sm text-white">Cancelar</button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Observations */}

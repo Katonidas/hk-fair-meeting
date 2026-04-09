@@ -125,7 +125,8 @@ async function pushProducts() {
   const meetingIds = new Set(localMeetings.map(m => m.id))
 
   for (const p of allProducts) {
-    if (!meetingIds.has(p.meeting_id)) continue
+    // Push if product has a valid meeting OR a direct supplier_id (manual product)
+    if (!p.supplier_id && !meetingIds.has(p.meeting_id)) continue
     const row = toSupabaseProduct(p)
     const { error } = await supabase.from('products').upsert(row, { onConflict: 'id' })
     if (error) {
@@ -323,7 +324,8 @@ function fromSupabaseMeeting(r: Record<string, unknown>): Meeting {
 function toSupabaseProduct(p: Product) {
   return {
     id: p.id,
-    meeting_id: p.meeting_id,
+    meeting_id: p.meeting_id || null,
+    supplier_id: p.supplier_id || null,
     product_type: p.product_type,
     item_model: p.item_model,
     price: p.price,
@@ -344,7 +346,8 @@ function toSupabaseProduct(p: Product) {
 function fromSupabaseProduct(r: Record<string, unknown>): Product {
   return {
     id: r.id as string,
-    meeting_id: r.meeting_id as string,
+    meeting_id: (r.meeting_id as string) || '',
+    supplier_id: (r.supplier_id as string) || undefined,
     product_type: (r.product_type as string) || '',
     item_model: (r.item_model as string) || '',
     price: (r.price as number) ?? null,

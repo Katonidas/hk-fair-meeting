@@ -40,7 +40,9 @@ export class FairDB extends Dexie {
         }
       })
     })
-    this.version(9).stores({}).upgrade(tx => {
+    this.version(9).stores({
+      products: 'id, meeting_id, supplier_id, product_type, item_model, status, created_at',
+    }).upgrade(tx => {
       return tx.table('searched_products').toCollection().modify(sp => {
         if (!sp.candidate_product_ids) {
           sp.candidate_product_ids = []
