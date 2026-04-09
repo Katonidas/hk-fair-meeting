@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
@@ -374,6 +374,14 @@ function MeetingsList({
   onSort: (col: string) => void
 }) {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
+
+  useEffect(() => {
+    if (!openMenu) return
+    const close = () => setOpenMenu(null)
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [openMenu])
 
   if (!meetings || meetings.length === 0) {
     return (
@@ -484,7 +492,12 @@ function MeetingsList({
                 <td className="px-2 py-2.5 text-center" onClick={e => e.stopPropagation()}>
                   <div className="relative">
                     <button
-                      onClick={() => setOpenMenu(openMenu === m.id ? null : m.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        setMenuPos({ top: rect.bottom + 4, left: rect.right - 176 })
+                        setOpenMenu(openMenu === m.id ? null : m.id)
+                      }}
                       className="rounded p-1 text-gray-400 hover:bg-gray-100"
                     >
                       <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -492,7 +505,7 @@ function MeetingsList({
                       </svg>
                     </button>
                     {openMenu === m.id && (
-                      <div className="absolute right-0 top-8 z-20 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                      <div className="fixed z-[80] w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg" style={{ top: menuPos.top, left: menuPos.left }} onClick={e => e.stopPropagation()}>
                         <button onClick={() => { setOpenMenu(null); navigate(`/meeting/${m.id}?edit=1`) }}
                           className="flex w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">Editar</button>
                         <button onClick={() => handleDuplicate(m)}
