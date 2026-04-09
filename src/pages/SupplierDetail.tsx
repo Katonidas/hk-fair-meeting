@@ -335,7 +335,7 @@ export default function SupplierDetail({ currentUser }: Props) {
       <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white px-4 py-3 shadow-lg">
         <div className="flex gap-3">
           <button
-            onClick={() => navigate('/?tab=suppliers')}
+            onClick={() => navigate(-1)}
             className="rounded-xl border border-gray-300 bg-gray-50 px-4 py-4 text-base font-medium text-gray-500 transition-colors hover:bg-gray-100"
           >
             ← Volver

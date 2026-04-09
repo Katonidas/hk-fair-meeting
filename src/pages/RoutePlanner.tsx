@@ -391,12 +391,12 @@ export default function RoutePlanner() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-light">
-      {/* Header */}
-      <div className="sticky top-0 z-10 border-b border-gray-200 bg-white px-4 py-3">
+    <div className="bg-gray-light">
+      {/* Title bar */}
+      <div className="border-b border-gray-200 bg-white px-4 py-3">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate(-1)}
             className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -502,14 +502,6 @@ export default function RoutePlanner() {
         </span>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-4 px-4 pb-2 text-[11px]">
-        <span className="font-medium text-gray-500">Relevancia:</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full bg-red-100 border border-red-300"></span> <span className="text-red-700 font-bold">IMPRESCINDIBLE</span></span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full bg-yellow-100 border border-yellow-300"></span> <span className="text-yellow-700 font-bold">IMPORTANTE</span></span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full bg-gray-100 border border-gray-300"></span> <span className="text-gray-500 font-bold">OPCIONAL</span></span>
-      </div>
-
       {/* Two-panel layout */}
       <div className="flex flex-col gap-4 px-4 pb-8 lg:flex-row">
         {/* Visited panel */}
@@ -563,6 +555,11 @@ export default function RoutePlanner() {
               PENDIENTES
               {optimizedRoute && ' (RUTA OPTIMIZADA)'}
             </h2>
+            <div className="mt-1 flex items-center gap-3 text-[10px]">
+              <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-red-100 border border-red-300"></span> <span className="text-red-700 font-bold">IMPRESCINDIBLE</span></span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-yellow-100 border border-yellow-300"></span> <span className="text-yellow-700 font-bold">IMPORTANTE</span></span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-gray-100 border border-gray-300"></span> <span className="text-gray-500 font-bold">OPCIONAL</span></span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">

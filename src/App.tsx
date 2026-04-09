@@ -30,8 +30,8 @@ export default function App() {
         <Route path="/searched-products" element={<SearchedProducts />} />
         <Route path="/captured-products" element={<CapturedProducts />} />
         <Route path="/settings" element={<Settings currentUser={currentUser} />} />
+        <Route path="/route-planner" element={<RoutePlanner />} />
       </Route>
-      <Route path="/route-planner" element={<RoutePlanner />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
