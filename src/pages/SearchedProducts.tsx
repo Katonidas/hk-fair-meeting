@@ -483,20 +483,68 @@ function ProductViewModal({
     const prods = await Promise.all(ids.map(id => db.products.get(id)))
     const valid = prods.filter((p): p is Product => p != null)
 
-    // Enrich with supplier name
     const allMeetings = await db.meetings.toArray()
     const allSuppliers = await db.suppliers.toArray()
     const meetingMap = new Map(allMeetings.map(m => [m.id, m]))
     const supplierMap = new Map(allSuppliers.map(s => [s.id, s]))
 
-    return valid.map(p => {
-      const meeting = meetingMap.get(p.meeting_id)
-      const supplier = meeting ? supplierMap.get(meeting.supplier_id) : undefined
-      return { ...p, supplierName: supplier?.name || '—', supplierStand: supplier?.stand || '—' }
-    })
+    return enrichProducts(valid, meetingMap, supplierMap)
   }, [product.candidate_product_ids])
 
-  // Search available captured products (not yet linked)
+  // Helper: enrich products with supplier info
+  function enrichProducts(
+    products: Product[],
+    meetingMap: Map<string, { supplier_id: string }>,
+    supplierMap: Map<string, { name: string; stand: string }>
+  ) {
+    return products.map(p => {
+      let supplier = p.supplier_id ? supplierMap.get(p.supplier_id) : undefined
+      if (!supplier) {
+        const meeting = meetingMap.get(p.meeting_id)
+        supplier = meeting ? supplierMap.get(meeting.supplier_id) : undefined
+      }
+      return { ...p, supplierName: supplier?.name || '—', supplierStand: supplier?.stand || '—' }
+    })
+  }
+
+  // Auto-suggestions: same product type + price in range (-30% to +10% of target)
+  const suggestions = useLiveQuery(async () => {
+    if (!showCandidateSearch) return []
+    const linkedIds = new Set(product.candidate_product_ids || [])
+    const targetPrice = computed
+
+    const allProducts = await db.products.toArray()
+    const allMeetings = await db.meetings.toArray()
+    const allSuppliers = await db.suppliers.toArray()
+    const meetingMap = new Map(allMeetings.map(m => [m.id, m]))
+    const supplierMap = new Map(allSuppliers.map(s => [s.id, s]))
+
+    const productTypeNorm = normalize(product.product_type)
+    const productTypeWords = productTypeNorm.split(/[\s,;/]+/).filter(w => w.length > 2)
+
+    const matched = allProducts
+      .filter(p => !linkedIds.has(p.id))
+      .filter(p => {
+        // Type match: at least one word overlaps
+        const pType = normalize(p.product_type)
+        const typeMatch = productTypeWords.some(w => pType.includes(w) || w.includes(pType))
+        if (!typeMatch) return false
+
+        // Price match: if we have a target, check range (-30% to +10%)
+        if (targetPrice && p.price != null) {
+          const minPrice = targetPrice * 0.7  // 30% cheaper
+          const maxPrice = targetPrice * 1.1  // 10% more expensive
+          return p.price >= minPrice && p.price <= maxPrice
+        }
+
+        // If no target price, just match by type
+        return true
+      })
+
+    return enrichProducts(matched, meetingMap, supplierMap).slice(0, 8)
+  }, [showCandidateSearch, product.candidate_product_ids, computed])
+
+  // Manual search results
   const searchResults = useLiveQuery(async () => {
     if (!showCandidateSearch || !candidateSearch.trim()) return []
     const q = normalize(candidateSearch)
@@ -508,13 +556,10 @@ function ProductViewModal({
     const meetingMap = new Map(allMeetings.map(m => [m.id, m]))
     const supplierMap = new Map(allSuppliers.map(s => [s.id, s]))
 
-    return allProducts
-      .filter(p => !linkedIds.has(p.id))
-      .map(p => {
-        const meeting = meetingMap.get(p.meeting_id)
-        const supplier = meeting ? supplierMap.get(meeting.supplier_id) : undefined
-        return { ...p, supplierName: supplier?.name || '—', supplierStand: supplier?.stand || '—' }
-      })
+    return enrichProducts(
+      allProducts.filter(p => !linkedIds.has(p.id)),
+      meetingMap, supplierMap
+    )
       .filter(p =>
         normalize(p.supplierName).includes(q) ||
         normalize(p.product_type).includes(q) ||
@@ -532,6 +577,8 @@ function ProductViewModal({
       candidate_product_ids: updated,
       updated_at: new Date().toISOString(),
     })
+    // Mark the captured product as "selected"
+    await db.products.update(productId, { status: 'selected' })
     // Update local product object for reactivity
     product.candidate_product_ids = updated
     setCandidateSearch('')
@@ -612,9 +659,43 @@ function ProductViewModal({
               </button>
             </div>
 
-            {/* Search bar for adding candidates */}
+            {/* Search bar + suggestions for adding candidates */}
             {showCandidateSearch && (
               <div className="mb-3">
+                {/* Auto-suggestions */}
+                {suggestions && suggestions.length > 0 && !candidateSearch.trim() && (
+                  <div className="mb-3">
+                    <p className="mb-1.5 text-[11px] font-semibold text-green-700">
+                      Sugerencias automáticas — tipo similar{computed ? ` + precio $${(computed * 0.7).toFixed(0)}–$${(computed * 1.1).toFixed(0)}` : ''}
+                    </p>
+                    <div className="max-h-52 overflow-y-auto rounded-lg border border-green-200 bg-green-50/50">
+                      {suggestions.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => addCandidate(p.id)}
+                          className="flex w-full items-center gap-3 border-b border-green-100 px-3 py-2 text-left text-xs hover:bg-green-100"
+                        >
+                          {p.photos?.[0] && (
+                            <img src={p.photos[0]} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-gray-800 truncate">
+                              {p.product_type} — {p.item_model || '?'}
+                            </p>
+                            <p className="text-gray-500 truncate">
+                              {p.supplierName} · {p.price != null ? `$${p.price}` : '—'} · {p.features || ''}
+                            </p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-green-200 px-2 py-0.5 text-[10px] font-bold text-green-800">
+                            + Añadir
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Manual search */}
                 <input
                   type="text"
                   placeholder="Buscar por proveedor, tipo, modelo, features..."
