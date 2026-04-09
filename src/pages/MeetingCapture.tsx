@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
@@ -229,18 +229,11 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
           </div>
 
           {products && products.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              {products.map(p => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  onEdit={() => { setEditingProduct(p); setShowProductForm(true) }}
-                  onDelete={async () => {
-                    await db.products.delete(p.id)
-                  }}
-                />
-              ))}
-            </div>
+            <ProductsTable
+              products={products}
+              onEdit={(p) => { setEditingProduct(p); setShowProductForm(true) }}
+              onDelete={async (id) => { await db.products.delete(id) }}
+            />
           ) : (
             <p className="py-4 text-center text-sm text-gray-400">
               Sin productos aún
@@ -320,56 +313,108 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
   )
 }
 
-function ProductCard({
-  product,
+function ProductsTable({
+  products,
   onEdit,
   onDelete,
 }: {
-  product: Product
-  onEdit: () => void
-  onDelete: () => void
+  products: Product[]
+  onEdit: (p: Product) => void
+  onDelete: (id: string) => void
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [viewImage, setViewImage] = useState<string | null>(null)
 
-  const sampleLabel = {
-    collected: '✅ Recogido',
-    pending: '⏳ Pdte envío',
-    no: '—',
-  }[product.sample_status]
+  const fmt = (n: number | null) => n != null ? n.toFixed(2) : '—'
 
   return (
-    <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between text-left"
-      >
-        <div>
-          <p className="text-sm font-semibold text-gray-800">{product.product_type ? `${product.product_type} — ` : ''}{product.item_model || 'Sin modelo'}</p>
-          <p className="text-xs text-gray-400">
-            {product.price ? `$${product.price}` : 'Sin precio'} · MOQ: {product.moq || '—'} · {sampleLabel}
-          </p>
-        </div>
-        <svg className={`h-4 w-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      {expanded && (
-        <div className="mt-3 space-y-1 border-t border-gray-200 pt-3 text-xs text-gray-500">
-          {product.target_price && <p><span className="font-medium">Target:</span> ${product.target_price}</p>}
-          {product.features && <p><span className="font-medium">Features:</span> {product.features}</p>}
-          {product.options && <p><span className="font-medium">Options:</span> {product.options}</p>}
-          {product.observations && <p><span className="font-medium">Notas:</span> {product.observations}</p>}
-          <div className="flex gap-2 pt-2">
-            <button onClick={onEdit} className="rounded bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
-              Editar
-            </button>
-            <button onClick={onDelete} className="rounded bg-red-50 px-3 py-1.5 text-xs font-medium text-red-500">
-              Eliminar
-            </button>
-          </div>
+    <>
+      <div className="-mx-4 overflow-x-auto">
+        <table className="w-full min-w-[650px] text-xs">
+          <thead>
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="px-2 py-1.5 text-left font-semibold text-gray-500">Tipo</th>
+              <th className="px-2 py-1.5 text-left font-semibold text-gray-500">Item Number</th>
+              <th className="px-2 py-1.5 text-right font-semibold text-gray-500">Precio USD</th>
+              <th className="px-2 py-1.5 text-right font-semibold text-gray-500">Target USD</th>
+              <th className="px-2 py-1.5 text-right font-semibold text-gray-500">MOQ</th>
+              <th className="px-2 py-1.5 text-left font-semibold text-gray-500">Features</th>
+              <th className="px-2 py-1.5 text-center font-semibold text-gray-500">Sample</th>
+              <th className="px-2 py-1.5 text-center font-semibold text-gray-500">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map(p => {
+              const isExpanded = expandedId === p.id
+              const sampleLabel = { collected: 'Recogido', pending: 'Pdte', no: '—' }[p.sample_status]
+              const sampleColor = { collected: 'text-green-600 font-bold', pending: 'text-yellow-600', no: 'text-gray-300' }[p.sample_status]
+              return (
+                <Fragment key={p.id}>
+                  <tr
+                    onClick={() => setExpandedId(isExpanded ? null : p.id)}
+                    className="cursor-pointer border-b border-gray-100 bg-white hover:bg-blue-50"
+                  >
+                    <td className="px-2 py-2 text-gray-600">{p.product_type || '—'}</td>
+                    <td className="px-2 py-2 font-medium text-gray-800">{p.item_model || '—'}</td>
+                    <td className="px-2 py-2 text-right text-gray-600">{fmt(p.price)}</td>
+                    <td className="px-2 py-2 text-right text-gray-600">{fmt(p.target_price)}</td>
+                    <td className="px-2 py-2 text-right text-gray-600">{p.moq || '—'}</td>
+                    <td className="group relative px-2 py-2 text-gray-500 max-w-[120px] truncate">
+                      {p.features || '—'}
+                      {p.features && (
+                        <div className="pointer-events-none invisible absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-gray-200 bg-white p-2 text-xs text-gray-700 shadow-lg group-hover:visible whitespace-pre-wrap">
+                          {p.features}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-2 py-2 text-center text-gray-600">{p.sample_units || '—'}</td>
+                    <td className={`px-2 py-2 text-center ${sampleColor}`}>{sampleLabel}</td>
+                  </tr>
+                  {isExpanded && (
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <td colSpan={8} className="px-3 py-3">
+                        <div className="space-y-2 text-xs text-gray-500">
+                          {p.options && <p><span className="font-medium text-gray-700">Options:</span> {p.options}</p>}
+                          {p.observations && <p><span className="font-medium text-gray-700">Notas:</span> {p.observations}</p>}
+                          {p.photos && p.photos.length > 0 && (
+                            <div>
+                              <p className="mb-1 font-medium text-gray-700">Fotos:</p>
+                              <div className="flex flex-wrap gap-2">
+                                {p.photos.map((url, i) => (
+                                  <img
+                                    key={i}
+                                    src={url}
+                                    alt={`Foto ${i + 1}`}
+                                    onClick={(e) => { e.stopPropagation(); setViewImage(url) }}
+                                    className="h-14 w-14 cursor-pointer rounded-lg object-cover hover:opacity-80"
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <div className="flex gap-2 pt-1">
+                            <button onClick={(e) => { e.stopPropagation(); onEdit(p) }} className="rounded bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">Editar</button>
+                            <button onClick={(e) => { e.stopPropagation(); onDelete(p.id) }} className="rounded bg-red-50 px-3 py-1.5 text-xs font-medium text-red-500">Eliminar</button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Image viewer */}
+      {viewImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setViewImage(null)}>
+          <img src={viewImage} alt="Foto ampliada" className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain" />
+          <button onClick={() => setViewImage(null)} className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/40">✕</button>
         </div>
       )}
-    </div>
+    </>
   )
 }
 
@@ -441,9 +486,9 @@ function ProductFormModal({
             <Field label="Item / Model Number" value={itemModel} onChange={setItemModel} placeholder="ABC-123" />
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <Field label="Precio (USD)" value={price} onChange={setPrice} type="number" placeholder="0.00" />
-            <Field label="Target Price" value={targetPrice} onChange={setTargetPrice} type="number" placeholder="0.00" />
-            <Field label="MOQ" value={moq} onChange={setMoq} type="number" placeholder="500" />
+            <Field label="Precio (USD)" value={price} onChange={setPrice} type="number" placeholder="" />
+            <Field label="Target Price" value={targetPrice} onChange={setTargetPrice} type="number" placeholder="" />
+            <Field label="MOQ" value={moq} onChange={setMoq} type="number" placeholder="" />
           </div>
           <Field label="Features / Specs" value={features} onChange={setFeatures} multiline placeholder="Material, dimensiones, certificaciones..." />
           <Field label="Options (extras)" value={options} onChange={setOptions} multiline placeholder="Colores disponibles, logo, packaging custom..." />
