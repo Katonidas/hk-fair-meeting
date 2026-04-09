@@ -14,6 +14,9 @@ export default function Layout({ currentUser, onLogout }: Props) {
   const navigate = useNavigate()
   const location = useLocation()
 
+  const searchParams = new URLSearchParams(location.search)
+  const tabParam = searchParams.get('tab')
+
   const activeTab: TabKey =
     location.pathname === '/captured-products'
       ? 'captured-products'
@@ -21,13 +24,17 @@ export default function Layout({ currentUser, onLogout }: Props) {
         ? 'searched-products'
         : location.pathname.startsWith('/supplier')
           ? 'suppliers'
-          : 'meetings'
+          : location.pathname.startsWith('/meeting')
+            ? 'meetings'
+            : tabParam === 'suppliers'
+              ? 'suppliers'
+              : 'meetings'
 
   const tabCls = (tab: TabKey) =>
-    `flex-1 border-b-2 pb-2 text-sm font-medium transition-colors ${
+    `flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
       activeTab === tab
-        ? 'border-primary text-primary'
-        : 'border-transparent text-gray-400'
+        ? 'bg-primary text-white'
+        : 'text-gray-400 hover:text-gray-600'
     }`
 
   return (
@@ -75,7 +82,7 @@ export default function Layout({ currentUser, onLogout }: Props) {
       </div>
 
       {/* Tabs */}
-      <div className="mt-4 flex border-b border-gray-200 px-4">
+      <div className="mt-4 flex gap-1 px-4 pb-2">
         <button onClick={() => navigate('/')} className={tabCls('meetings')}>
           Reuniones
         </button>

@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
@@ -33,6 +34,7 @@ function calcTargetCost(brand: string, pvpr: number | null, marginTarget: string
 }
 
 export default function SearchedProducts() {
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingProduct, setEditingProduct] = useState<SearchedProduct | null>(null)
@@ -161,6 +163,12 @@ export default function SearchedProducts() {
   return (
     <div className="flex flex-col">
       <div className="flex-1 px-4 py-3">
+        <button
+          onClick={() => navigate('/')}
+          className="mb-3 inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+        >
+          ← Volver a inicio
+        </button>
         {/* Actions */}
         <div className="mb-3 flex gap-2">
           <button
@@ -505,8 +513,8 @@ function ProductViewModal({
           {/* Actions */}
           <div className="flex gap-3">
             <button onClick={onClose}
-              className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-600 hover:bg-gray-50">
-              Cerrar
+              className="rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-500 hover:bg-gray-100">
+              ← Volver
             </button>
             <button onClick={onEdit}
               className="flex-1 rounded-xl bg-primary py-3 text-sm font-bold text-white hover:bg-primary-light">

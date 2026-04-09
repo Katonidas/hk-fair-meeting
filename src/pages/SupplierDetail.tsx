@@ -384,14 +384,22 @@ export default function SupplierDetail({ currentUser }: Props) {
         </div>
       )}
 
-      {/* New Meeting Button */}
+      {/* Footer Buttons */}
       <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white px-4 py-3 shadow-lg">
-        <button
-          onClick={handleNewMeeting}
-          className="w-full rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
-        >
-          NUEVA REUNIÓN CON ESTE PROVEEDOR
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => navigate('/?tab=suppliers')}
+            className="rounded-xl border border-gray-300 bg-gray-50 px-4 py-4 text-base font-medium text-gray-500 transition-colors hover:bg-gray-100"
+          >
+            ← Volver
+          </button>
+          <button
+            onClick={handleNewMeeting}
+            className="flex-1 rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
+          >
+            NUEVA REUNIÓN CON ESTE PROVEEDOR
+          </button>
+        </div>
       </div>
     </div>
   )

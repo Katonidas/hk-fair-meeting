@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
@@ -29,6 +30,7 @@ interface EnrichedProduct {
 }
 
 export default function CapturedProducts() {
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProductStatus | 'all'>('all')
   const [sortCol, setSortCol] = useState<SortCol>('supplierName')
@@ -125,6 +127,12 @@ export default function CapturedProducts() {
   return (
     <div className="flex flex-col">
       <div className="flex-1 px-4 py-3">
+        <button
+          onClick={() => navigate('/')}
+          className="mb-3 inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+        >
+          ← Volver a inicio
+        </button>
         <div className="mb-3 flex gap-2">
           <input
             type="text"
@@ -276,72 +284,211 @@ function ProductDetailModal({
   onClose: () => void
   onPhotoClick: (url: string) => void
 }) {
+  const [editing, setEditing] = useState(false)
+  const [productType, setProductType] = useState(product.product_type)
+  const [itemModel, setItemModel] = useState(product.item_model)
+  const [price, setPrice] = useState(product.price?.toString() || '')
+  const [targetPrice, setTargetPrice] = useState(product.target_price?.toString() || '')
+  const [moq, setMoq] = useState(product.moq?.toString() || '')
+  const [features, setFeatures] = useState(product.features)
+  const [options, setOptions] = useState(product.options)
+  const [observations, setObservations] = useState(product.observations)
+  const [currentStatus, setCurrentStatus] = useState<ProductStatus>(product.status)
+
+  async function handleStatusChange(newStatus: ProductStatus) {
+    setCurrentStatus(newStatus)
+    await db.products.update(product.id, { status: newStatus })
+  }
+
+  async function handleSaveEdits() {
+    await db.products.update(product.id, {
+      product_type: productType.trim(),
+      item_model: itemModel.trim(),
+      price: price ? parseFloat(price) : null,
+      target_price: targetPrice ? parseFloat(targetPrice) : null,
+      moq: moq ? parseInt(moq) : null,
+      features: features.trim(),
+      options: options.trim(),
+      observations: observations.trim(),
+    })
+    setEditing(false)
+  }
+
+  const fieldCls = 'w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-primary focus:outline-none'
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5"
+        className="max-h-[95vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 mx-2"
         onClick={e => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-800">Detalle del producto</h3>
-          <button onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">&#10005;</button>
+          <div className="flex items-center gap-2">
+            {!editing && (
+              <button
+                onClick={() => setEditing(true)}
+                className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+              >
+                Editar
+              </button>
+            )}
+            <button onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">&#10005;</button>
+          </div>
         </div>
 
-        <div className="space-y-3">
-          {/* Status */}
-          <div className="flex items-center gap-2">
-            <StatusBadge status={product.status} />
+        <div className="space-y-4">
+          {/* Status buttons — always interactive */}
+          <div>
+            <p className="mb-2 text-xs font-medium text-gray-500">Estado</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleStatusChange('discarded')}
+                className={`flex-1 rounded-lg py-2.5 text-sm font-bold transition-colors ${
+                  currentStatus === 'discarded'
+                    ? 'bg-red-500 text-white'
+                    : 'border border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                }`}
+              >
+                DESCARTADO
+              </button>
+              <button
+                onClick={() => handleStatusChange('interesting')}
+                className={`flex-1 rounded-lg py-2.5 text-sm font-bold transition-colors ${
+                  currentStatus === 'interesting'
+                    ? 'bg-orange-500 text-white'
+                    : 'border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100'
+                }`}
+              >
+                INTERESANTE
+              </button>
+              <button
+                onClick={() => handleStatusChange('selected')}
+                className={`flex-1 rounded-lg py-2.5 text-sm font-bold transition-colors ${
+                  currentStatus === 'selected'
+                    ? 'bg-green-500 text-white'
+                    : 'border border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                }`}
+              >
+                SELECCIONADO
+              </button>
+            </div>
           </div>
 
           {/* Supplier info */}
           <div className="rounded-lg bg-gray-50 p-3">
             <p className="text-xs font-semibold text-gray-500">Proveedor</p>
-            <p className="text-sm font-medium text-gray-800">{product.supplierName}</p>
-            <p className="text-xs text-gray-400">Stand {product.supplierStand}</p>
+            <p className="text-base font-medium text-gray-800">{product.supplierName}</p>
+            <p className="text-sm text-gray-400">Stand {product.supplierStand}</p>
           </div>
 
           {/* Product fields */}
-          <div className="grid grid-cols-2 gap-3">
-            <DetailField label="Tipo de producto" value={product.product_type} />
-            <DetailField label="Item / Model" value={product.item_model} />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <DetailField label="Precio" value={product.price ? `$${product.price} ${product.price_currency}` : '—'} />
-            <DetailField label="Target Price" value={product.target_price ? `$${product.target_price}` : '—'} />
-            <DetailField label="MOQ" value={product.moq?.toString() || '—'} />
-          </div>
-          <DetailField label="Features / Specs" value={product.features || '—'} />
-          <DetailField label="Options" value={product.options || '—'} />
-          <div className="grid grid-cols-2 gap-3">
-            <DetailField
-              label="Sample"
-              value={
-                product.sample_status === 'collected' ? `Recogido (${product.sample_units || 0} uds)` :
-                product.sample_status === 'pending' ? `Pdte envio (${product.sample_units || 0} uds)` : 'No'
-              }
-            />
-          </div>
-          {product.observations && (
-            <DetailField label="Observaciones" value={product.observations} />
+          {editing ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Tipo de producto</label>
+                  <input type="text" value={productType} onChange={e => setProductType(e.target.value)} className={fieldCls} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Item / Model</label>
+                  <input type="text" value={itemModel} onChange={e => setItemModel(e.target.value)} className={fieldCls} />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Precio</label>
+                  <input type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={fieldCls} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Target Price</label>
+                  <input type="number" step="0.01" value={targetPrice} onChange={e => setTargetPrice(e.target.value)} className={fieldCls} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">MOQ</label>
+                  <input type="number" value={moq} onChange={e => setMoq(e.target.value)} className={fieldCls} />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Features / Specs</label>
+                <textarea value={features} onChange={e => setFeatures(e.target.value)} rows={3} className={fieldCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Options</label>
+                <textarea value={options} onChange={e => setOptions(e.target.value)} rows={2} className={fieldCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Observaciones</label>
+                <textarea value={observations} onChange={e => setObservations(e.target.value)} rows={2} className={fieldCls} />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEditing(false)}
+                  className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveEdits}
+                  className="flex-1 rounded-xl bg-green-500 py-3 text-sm font-bold text-white hover:bg-green-600"
+                >
+                  Guardar cambios
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <DetailField label="Tipo de producto" value={product.product_type} />
+                <DetailField label="Item / Model" value={product.item_model} />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <DetailField label="Precio" value={product.price ? `$${product.price} ${product.price_currency}` : '—'} />
+                <DetailField label="Target Price" value={product.target_price ? `$${product.target_price}` : '—'} />
+                <DetailField label="MOQ" value={product.moq?.toString() || '—'} />
+              </div>
+              <DetailField label="Features / Specs" value={product.features || '—'} />
+              <DetailField label="Options" value={product.options || '—'} />
+              <div className="grid grid-cols-2 gap-3">
+                <DetailField
+                  label="Sample"
+                  value={
+                    product.sample_status === 'collected' ? `Recogido (${product.sample_units || 0} uds)` :
+                    product.sample_status === 'pending' ? `Pdte envio (${product.sample_units || 0} uds)` : 'No'
+                  }
+                />
+              </div>
+              {product.observations && (
+                <DetailField label="Observaciones" value={product.observations} />
+              )}
+            </>
           )}
 
           {/* Photos */}
           {product.photos && product.photos.length > 0 && (
             <div>
               <p className="mb-2 text-xs font-medium text-gray-500">Fotos ({product.photos.length})</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 {product.photos.map((url, i) => (
                   <img
                     key={i}
                     src={url}
                     alt={`Foto ${i + 1}`}
-                    className="h-20 w-20 cursor-pointer rounded-lg border border-gray-200 object-cover hover:opacity-80"
+                    className="h-32 w-32 cursor-pointer rounded-lg border border-gray-200 object-cover hover:opacity-80"
                     onClick={() => onPhotoClick(url)}
                   />
                 ))}
               </div>
             </div>
           )}
+
+          {/* Back button */}
+          <button
+            onClick={onClose}
+            className="w-full rounded-xl border border-gray-300 bg-gray-50 py-3 text-sm font-medium text-gray-500 hover:bg-gray-100"
+          >
+            ← Volver al listado
+          </button>
         </div>
       </div>
     </div>
