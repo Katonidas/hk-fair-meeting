@@ -285,6 +285,8 @@ async function pullSuppliers() {
 
   if (error || !data) return
 
+  const remoteIds = new Set<string>(data.map((r: Record<string, unknown>) => r.id as string))
+
   for (const remote of data) {
     // Skip suppliers that were deleted locally
     if (deletedSupplierIds.has(remote.id)) continue
@@ -292,6 +294,15 @@ async function pullSuppliers() {
     const local = await db.suppliers.get(remote.id)
     if (!local || remote.updated_at > local.updated_at) {
       await db.suppliers.put(fromSupabaseSupplier(remote))
+    }
+  }
+
+  // Detect deletions: any local supplier that was previously synced (has synced_at)
+  // but is missing from remote → deleted on another device, delete locally
+  const localSuppliers = await db.suppliers.toArray()
+  for (const local of localSuppliers) {
+    if (local.synced_at && !remoteIds.has(local.id)) {
+      await db.suppliers.delete(local.id)
     }
   }
 }
@@ -304,6 +315,8 @@ async function pullMeetings() {
 
   if (error || !data) return
 
+  const remoteIds = new Set<string>(data.map((r: Record<string, unknown>) => r.id as string))
+
   for (const remote of data) {
     // Skip meetings that were deleted locally
     if (deletedMeetingIds.has(remote.id)) continue
@@ -311,6 +324,16 @@ async function pullMeetings() {
     const local = await db.meetings.get(remote.id)
     if (!local || remote.updated_at > local.updated_at) {
       await db.meetings.put(fromSupabaseMeeting(remote))
+    }
+  }
+
+  // Detect deletions on another device
+  const localMeetings = await db.meetings.toArray()
+  for (const local of localMeetings) {
+    if (local.synced_at && !remoteIds.has(local.id)) {
+      // Also delete products of this meeting
+      await db.products.where('meeting_id').equals(local.id).delete()
+      await db.meetings.delete(local.id)
     }
   }
 }
@@ -321,6 +344,8 @@ async function pullProducts() {
     .select('*')
 
   if (error || !data) return
+
+  const remoteIds = new Set<string>(data.map((r: Record<string, unknown>) => r.id as string))
 
   for (const remote of data) {
     // Skip products that were deleted locally
@@ -334,6 +359,23 @@ async function pullProducts() {
     } else if (remote.updated_at && (!local.created_at || remote.updated_at > local.created_at)) {
       // Update existing products with newer remote data
       await db.products.put(fromSupabaseProduct(remote))
+    }
+  }
+
+  // Detect deletions: for any local product whose meeting/supplier is known in remote
+  // but the product itself is missing → deleted elsewhere, delete locally
+  const localProducts = await db.products.toArray()
+  const localMeetings = await db.meetings.toArray()
+  const localMeetingIds = new Set(localMeetings.map(m => m.id))
+  for (const local of localProducts) {
+    // Only delete if the product is older than 30s (to avoid race with push) and
+    // either belongs to a still-existing meeting or has supplier_id
+    if (remoteIds.has(local.id)) continue
+    const ageMs = Date.now() - new Date(local.created_at || 0).getTime()
+    if (ageMs < 30_000) continue  // too new, might not be synced yet
+    if (local.supplier_id || localMeetingIds.has(local.meeting_id)) {
+      await db.products.delete(local.id)
+      await db.product_photos.where('product_id').equals(local.id).delete()
     }
   }
 }
