@@ -12,24 +12,33 @@ const listeners = new Set<(status: SyncStatus) => void>()
 // Persisted to localStorage to survive page refreshes
 const TOMBSTONE_KEY = 'hk-fair-tombstones'
 
-function loadTombstones(): { meetings: string[]; products: string[] } {
+function loadTombstones(): { meetings: string[]; products: string[]; suppliers: string[] } {
   try {
     const raw = localStorage.getItem(TOMBSTONE_KEY)
-    if (raw) return JSON.parse(raw)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      return {
+        meetings: parsed.meetings || [],
+        products: parsed.products || [],
+        suppliers: parsed.suppliers || [],
+      }
+    }
   } catch { /* ignore */ }
-  return { meetings: [], products: [] }
+  return { meetings: [], products: [], suppliers: [] }
 }
 
 function saveTombstones() {
   localStorage.setItem(TOMBSTONE_KEY, JSON.stringify({
     meetings: [...deletedMeetingIds],
     products: [...deletedProductIds],
+    suppliers: [...deletedSupplierIds],
   }))
 }
 
 const saved = loadTombstones()
 const deletedMeetingIds = new Set<string>(saved.meetings)
 const deletedProductIds = new Set<string>(saved.products)
+const deletedSupplierIds = new Set<string>(saved.suppliers)
 
 export function onSyncStatusChange(fn: (status: SyncStatus) => void) {
   listeners.add(fn)
@@ -70,6 +79,78 @@ export async function syncAll(): Promise<void> {
     setStatus('error')
   } finally {
     syncInProgress = false
+  }
+}
+
+// ── Bulk delete (Settings danger zone) ──
+
+export async function deleteAllMeetings(): Promise<void> {
+  const allMeetings = await db.meetings.toArray()
+  const allProducts = await db.products.toArray()
+
+  // Add all IDs to tombstones
+  for (const m of allMeetings) deletedMeetingIds.add(m.id)
+  for (const p of allProducts) deletedProductIds.add(p.id)
+  saveTombstones()
+
+  // Clear local
+  await db.products.clear()
+  await db.product_photos.clear()
+  await db.meetings.clear()
+
+  // Delete from Supabase if online
+  if (isSupabaseConfigured() && navigator.onLine) {
+    try {
+      for (const p of allProducts) {
+        await supabase.from('product_photos').delete().eq('product_id', p.id)
+        await supabase.from('products').delete().eq('id', p.id)
+      }
+      for (const m of allMeetings) {
+        await supabase.from('meetings').delete().eq('id', m.id)
+      }
+    } catch (err) {
+      console.error('Error deleting all meetings from Supabase:', err)
+    }
+  }
+}
+
+export async function deleteAllSuppliers(): Promise<void> {
+  const allSuppliers = await db.suppliers.toArray()
+
+  for (const s of allSuppliers) deletedSupplierIds.add(s.id)
+  saveTombstones()
+
+  await db.suppliers.clear()
+
+  if (isSupabaseConfigured() && navigator.onLine) {
+    try {
+      for (const s of allSuppliers) {
+        await supabase.from('suppliers').delete().eq('id', s.id)
+      }
+    } catch (err) {
+      console.error('Error deleting all suppliers from Supabase:', err)
+    }
+  }
+}
+
+export async function deleteAllProducts(): Promise<void> {
+  const allProducts = await db.products.toArray()
+
+  for (const p of allProducts) deletedProductIds.add(p.id)
+  saveTombstones()
+
+  await db.product_photos.clear()
+  await db.products.clear()
+
+  if (isSupabaseConfigured() && navigator.onLine) {
+    try {
+      for (const p of allProducts) {
+        await supabase.from('product_photos').delete().eq('product_id', p.id)
+        await supabase.from('products').delete().eq('id', p.id)
+      }
+    } catch (err) {
+      console.error('Error deleting all products from Supabase:', err)
+    }
   }
 }
 
@@ -205,6 +286,9 @@ async function pullSuppliers() {
   if (error || !data) return
 
   for (const remote of data) {
+    // Skip suppliers that were deleted locally
+    if (deletedSupplierIds.has(remote.id)) continue
+
     const local = await db.suppliers.get(remote.id)
     if (!local || remote.updated_at > local.updated_at) {
       await db.suppliers.put(fromSupabaseSupplier(remote))

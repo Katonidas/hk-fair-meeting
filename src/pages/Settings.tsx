@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
+import { deleteAllMeetings, deleteAllSuppliers, deleteAllProducts } from '@/lib/sync'
 import { getTerms, setTerms as saveTerms, getQOS, setQOS as saveQOS, getCCEmailsSetting, setCCEmailsSetting as saveCCEmails, getFormulaGameStr, setFormulaGame as saveFormulaGame, getFormulaTicnovaStr, setFormulaTicnova as saveFormulaTicnova } from '@/lib/settings'
 import type { UserName, Relevance } from '@/types'
 
@@ -440,16 +441,17 @@ export default function Settings({ currentUser }: Props) {
         {/* Danger Zone */}
         <div className="rounded-xl border border-red-200 bg-red-50 p-4">
           <h2 className="mb-2 text-sm font-semibold text-red-700">Zona peligrosa</h2>
+          <p className="mb-3 text-xs text-red-600">
+            Estas acciones borran los datos tanto localmente como en Supabase (servidor).
+          </p>
           <div className="flex flex-col gap-2">
             <button
               onClick={async () => {
                 const pwd = window.prompt('Contraseña para borrar reuniones:')
                 if (pwd !== 'APPROX') { if (pwd !== null) window.alert('Contraseña incorrecta'); return }
-                if (!window.confirm('¿Borrar TODAS las reuniones y sus productos?')) return
-
-                await db.products.clear()
-                await db.product_photos.clear()
-                await db.meetings.clear()
+                if (!window.confirm('¿Borrar TODAS las reuniones y sus productos? Esta acción borra local Y servidor.')) return
+                await deleteAllMeetings()
+                window.alert('Reuniones eliminadas correctamente')
               }}
               className="w-full rounded-lg border border-red-300 bg-white py-3 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
             >
@@ -459,12 +461,25 @@ export default function Settings({ currentUser }: Props) {
               onClick={async () => {
                 const pwd = window.prompt('Contraseña para borrar proveedores:')
                 if (pwd !== 'APPROX') { if (pwd !== null) window.alert('Contraseña incorrecta'); return }
-                if (!window.confirm('¿Borrar TODOS los proveedores? Las reuniones asociadas NO se borran.')) return
-                await db.suppliers.clear()
+                if (!window.confirm('¿Borrar TODOS los proveedores? Esta acción borra local Y servidor. Las reuniones asociadas NO se borran.')) return
+                await deleteAllSuppliers()
+                window.alert('Proveedores eliminados correctamente')
               }}
               className="w-full rounded-lg border border-red-300 bg-white py-3 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
             >
               Borrar todos los proveedores
+            </button>
+            <button
+              onClick={async () => {
+                const pwd = window.prompt('Contraseña para borrar productos:')
+                if (pwd !== 'APPROX') { if (pwd !== null) window.alert('Contraseña incorrecta'); return }
+                if (!window.confirm('¿Borrar TODOS los productos listados? Esta acción borra local Y servidor.')) return
+                await deleteAllProducts()
+                window.alert('Productos eliminados correctamente')
+              }}
+              className="w-full rounded-lg border border-red-300 bg-white py-3 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
+            >
+              Borrar todos los productos listados
             </button>
             <button
               onClick={handleClearData}
