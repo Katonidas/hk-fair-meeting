@@ -35,6 +35,32 @@ function nl2br(s: string): string {
   return esc(s).replace(/\n/g, '<br>')
 }
 
+// Convert text with bullet lines (• or -) to a proper HTML list with indentation
+function bulletsToHTML(text: string): string {
+  if (!text) return ''
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+  const allBullets = lines.every(l => /^[•\-*·]\s*/.test(l))
+
+  if (allBullets) {
+    const items = lines
+      .map(l => l.replace(/^[•\-*·]\s*/, ''))
+      .map(l => `<li style="margin: 4px 0; padding-left: 8px;">${esc(l)}</li>`)
+      .join('')
+    return `<ul style="margin: 8px 0 8px 40px; padding-left: 20px; color: #495057; font-size: 12px;">${items}</ul>`
+  }
+
+  // Mixed content: convert each bullet line to a li, non-bullet to <p>
+  const parts: string[] = []
+  for (const line of lines) {
+    if (/^[•\-*·]\s*/.test(line)) {
+      parts.push(`<li style="margin: 4px 0; padding-left: 8px;">${esc(line.replace(/^[•\-*·]\s*/, ''))}</li>`)
+    } else {
+      parts.push(`<p style="margin: 6px 0; color: #495057; font-size: 12px;">${esc(line)}</p>`)
+    }
+  }
+  return parts.join('')
+}
+
 export function generateMeetingEmailHTML(
   _supplier: Supplier,
   meeting: Meeting,
@@ -44,7 +70,6 @@ export function generateMeetingEmailHTML(
 
   // Styles local to this function
   const sectionGap = 'margin: 24px 0 12px 0;'
-  const indent = 'margin-left: 60px; padding: 10px 14px; background: #f8f9fa; border-left: 3px solid #6c757d; white-space: pre-wrap; font-size: 12px; color: #495057;'
   const h1Underlined = 'color: #1a2f5f; font-size: 17px; margin: 24px 0 8px 0; text-decoration: underline; text-transform: uppercase; letter-spacing: 0.5px;'
   const tblWrap = 'width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px;'
   const tblTh = 'background: #1a2f5f; color: #fff; padding: 8px 10px; text-align: left; font-weight: bold; font-size: 11px; text-transform: uppercase; border: 1px solid #1a2f5f;'
@@ -57,11 +82,11 @@ export function generateMeetingEmailHTML(
   L.push(`<p style="${STYLE.p}">Hello,</p>`)
   L.push(`<p style="${STYLE.p}">It was a pleasure visiting your stand at the HK Sources Fair. Please find below a summary of our meeting.</p>`)
 
-  // URGENT NOTES (line break before)
+  // VERY IMPORTANT! (line break before)
   if (meeting.urgent_notes?.trim()) {
     L.push(`<br>`)
     L.push(`<div style="${STYLE.urgent}">`)
-    L.push(`<p style="${STYLE.urgentTitle}">&#9888; URGENT NOTES</p>`)
+    L.push(`<p style="${STYLE.urgentTitle}">&#9888; VERY IMPORTANT!</p>`)
     L.push(`<p style="${STYLE.urgentBody}">${nl2br(meeting.urgent_notes.trim())}</p>`)
     L.push(`</div>`)
   }
@@ -70,11 +95,11 @@ export function generateMeetingEmailHTML(
   L.push(`<br>`)
   L.push(`<h1 style="${h1Underlined}">Terms &amp; Conditions</h1>`)
   L.push(`<p style="${STYLE.p}"><strong>IMPORTANT:</strong> Please note our standard terms and conditions. <u>All negotiations, agreed conditions and PRICES are based on and must include the following terms:</u></p>`)
-  L.push(`<div style="${indent}">${nl2br(getTerms())}</div>`)
+  L.push(bulletsToHTML(getTerms()))
 
   // SERVICE REQUIREMENTS
   L.push(`<p style="${sectionGap} font-weight: bold; color: #5a6678; text-transform: uppercase; font-size: 13px;">Service Requirements</p>`)
-  L.push(`<div style="${indent}">${nl2br(getQOS())}</div>`)
+  L.push(bulletsToHTML(getQOS()))
 
   // PRODUCTS OF INTEREST — table
   if (products.length > 0) {
