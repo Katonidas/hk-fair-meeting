@@ -36,7 +36,7 @@ function nl2br(s: string): string {
 }
 
 export function generateMeetingEmailHTML(
-  supplier: Supplier,
+  _supplier: Supplier,
   meeting: Meeting,
   products: Product[],
 ): string {
@@ -44,7 +44,7 @@ export function generateMeetingEmailHTML(
 
   // Styles local to this function
   const sectionGap = 'margin: 24px 0 12px 0;'
-  const indent = 'margin-left: 30px; padding: 10px 14px; background: #f8f9fa; border-left: 3px solid #6c757d; white-space: pre-wrap; font-size: 12px; color: #495057;'
+  const indent = 'margin-left: 60px; padding: 10px 14px; background: #f8f9fa; border-left: 3px solid #6c757d; white-space: pre-wrap; font-size: 12px; color: #495057;'
   const h1Underlined = 'color: #1a2f5f; font-size: 17px; margin: 24px 0 8px 0; text-decoration: underline; text-transform: uppercase; letter-spacing: 0.5px;'
   const tblWrap = 'width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px;'
   const tblTh = 'background: #1a2f5f; color: #fff; padding: 8px 10px; text-align: left; font-weight: bold; font-size: 11px; text-transform: uppercase; border: 1px solid #1a2f5f;'
@@ -53,8 +53,8 @@ export function generateMeetingEmailHTML(
 
   L.push(`<div style="${STYLE.wrap}">`)
 
-  // Greeting — single "Hello, {supplier name}"
-  L.push(`<p style="${STYLE.p}">Hello <strong>${esc(supplier.name)}</strong> team,</p>`)
+  // Greeting — simple "Hello,"
+  L.push(`<p style="${STYLE.p}">Hello,</p>`)
   L.push(`<p style="${STYLE.p}">It was a pleasure visiting your stand at the HK Sources Fair. Please find below a summary of our meeting.</p>`)
 
   // URGENT NOTES (line break before)
