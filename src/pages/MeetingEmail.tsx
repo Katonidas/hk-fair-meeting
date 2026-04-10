@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { getCCEmails } from '@/lib/constants'
 import { generateEmailSubject, generateEmailBody, buildMailtoUrl } from '@/lib/emailGenerator'
 import { translateAndCorrect } from '@/lib/translate'
+import { generateMeetingEmailHTML, copyHTMLToClipboard } from '@/lib/htmlEmail'
 import type { UserName } from '@/types'
 
 interface Props {
@@ -32,6 +33,8 @@ export default function MeetingEmail({ currentUser }: Props) {
   const [translating, setTranslating] = useState(false)
   const [translateError, setTranslateError] = useState('')
   const [translateSuccess, setTranslateSuccess] = useState(false)
+  const [preparing, setPreparing] = useState(false)
+  const [prepareMsg, setPrepareMsg] = useState('')
 
   useEffect(() => {
     if (meeting && supplier && products && !initialized) {
@@ -70,6 +73,44 @@ export default function MeetingEmail({ currentUser }: Props) {
         updated_at: now,
         updated_by: currentUser,
       })
+    }
+  }
+
+  async function handlePrepareEmail() {
+    if (!meeting || !supplier || !products) return
+    setPreparing(true)
+    setPrepareMsg('')
+    try {
+      // Generate HTML email matching the current body content
+      // (use the current editable body as plain text fallback)
+      const html = generateMeetingEmailHTML(supplier, meeting, products)
+      const copied = await copyHTMLToClipboard(html, body)
+
+      if (copied) {
+        setPrepareMsg('HTML copiado al portapapeles. Abriendo Outlook... Pega con Ctrl+V en el cuerpo.')
+      } else {
+        setPrepareMsg('No se pudo copiar al portapapeles. Abriendo Outlook igualmente...')
+      }
+
+      // Open mailto with TO, CC, Subject (empty body so Outlook doesn't wrap our paste)
+      const toList = toEmails.split(',').map(e => e.trim()).filter(Boolean)
+      const ccList = getCCEmails(currentUser)
+      const url = buildMailtoUrl(toList, ccList, subject, '')
+
+      setTimeout(() => {
+        window.open(url, '_self')
+      }, 300)
+
+      // Mark as generated
+      if (id && meeting) {
+        const now = new Date().toISOString()
+        db.meetings.update(id, { email_generated: true, email_sent_at: now, updated_at: now })
+        db.suppliers.update(meeting.supplier_id, { visited: true, updated_at: now, updated_by: currentUser })
+      }
+
+      setTimeout(() => setPrepareMsg(''), 8000)
+    } finally {
+      setPreparing(false)
     }
   }
 
@@ -160,6 +201,11 @@ export default function MeetingEmail({ currentUser }: Props) {
             Texto traducido y corregido correctamente
           </div>
         )}
+        {prepareMsg && (
+          <div className="rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 text-center text-sm font-medium text-purple-700">
+            {prepareMsg}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex flex-col gap-3 pb-6">
@@ -177,13 +223,25 @@ export default function MeetingEmail({ currentUser }: Props) {
             >
               {translating ? 'Traduciendo...' : 'TRADUCIR / CORREGIR'}
             </button>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handlePrepareEmail}
+              disabled={preparing}
+              className="flex-1 rounded-xl border-2 border-purple-500 bg-purple-50 py-4 text-base font-bold text-purple-700 transition-colors hover:bg-purple-100 active:bg-purple-200 disabled:opacity-50"
+            >
+              {preparing ? 'Preparando...' : 'PREPARAR EMAIL HTML (Outlook)'}
+            </button>
             <button
               onClick={handleOpenEmail}
               className="flex-1 rounded-xl bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark"
             >
-              ENVIAR EMAIL
+              ENVIAR EMAIL (texto plano)
             </button>
           </div>
+          <p className="text-center text-[11px] text-gray-500">
+            <strong>PREPARAR EMAIL HTML</strong>: copia el email con formato al portapapeles y abre Outlook con TO, CC y asunto. Solo tienes que pegar con Ctrl+V en el cuerpo.
+          </p>
           <button
             onClick={() => navigate(`/meeting/${id}`)}
             className="w-full rounded-xl border border-primary/30 bg-primary/5 py-3 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
