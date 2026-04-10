@@ -7,6 +7,7 @@ import { formatDate, formatTime } from '@/lib/format'
 import { USERS, getCCEmails } from '@/lib/constants'
 import { getMatchingSearchedProducts } from '@/lib/matching'
 import { buildMailtoUrl } from '@/lib/emailGenerator'
+import { generatePotentialProductsEmailHTML, copyHTMLToClipboard } from '@/lib/htmlEmail'
 import { getTerms } from '@/lib/settings'
 import { fmtPrice } from '@/lib/price'
 import type { UserName, Relevance, ProductStatus, SampleStatus } from '@/types'
@@ -573,6 +574,59 @@ function RenderTextWithLinks({ text }: { text: string }) {
 function PotentialProductsSection({ products, supplier }: { products: SearchedProduct[]; supplier: { name: string; emails: string[] } }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null)
+  const [preparing, setPreparing] = useState(false)
+  const [prepareMsg, setPrepareMsg] = useState('')
+
+  async function handlePrepareHTML() {
+    if (!supplier) return
+    setPreparing(true)
+    setPrepareMsg('')
+    try {
+      const currentUser = (localStorage.getItem('hk-fair-user') || 'Jesús') as UserName
+
+      // Build supplier object stub (htmlEmail only uses emails from it indirectly)
+      const supplierObj = {
+        id: '', name: supplier.name, stand: '', assigned_person: '', contact_person: '',
+        product_type: '', emails: supplier.emails, phone: '', relevance: 2 as const,
+        visit_day: '', visit_slot: '', visited: false, pending_topics: '',
+        interesting_products: '', has_catalogue: false, current_products: '',
+        supplier_notes: '', is_new: false, updated_at: '', updated_by: '',
+        created_at: '', synced_at: null,
+      }
+
+      // Build a map of product.id → target_cost so the calc function can return it
+      const tcMap = new Map(products.map(p => [p.id, p.target_cost]))
+      // Find product by matching all fields via closure — simpler: use sp.target_cost via index tracking
+      let idx = 0
+      const calcTC = () => {
+        const p = products[idx++]
+        return p ? p.target_cost : null
+      }
+      // Reset idx before each call: htmlEmail calls calcTC once per product sequentially
+      idx = 0
+      void tcMap
+
+      const html = generatePotentialProductsEmailHTML(
+        supplierObj,
+        products,
+        currentUser,
+        calcTC
+      )
+      const copied = await copyHTMLToClipboard(html, 'Productos buscados APPROX')
+
+      setPrepareMsg(copied
+        ? 'HTML copiado. Abriendo Outlook... Pega con Ctrl+V.'
+        : 'No se pudo copiar. Abriendo Outlook igualmente...'
+      )
+
+      const cc = getCCEmails(currentUser)
+      const url = buildMailtoUrl(supplier.emails, cc, 'Productos buscados APPROX', '')
+      setTimeout(() => window.open(url, '_self'), 300)
+      setTimeout(() => setPrepareMsg(''), 8000)
+    } finally {
+      setPreparing(false)
+    }
+  }
 
   function handleSendEmail() {
     if (!supplier) return
@@ -610,17 +664,31 @@ function PotentialProductsSection({ products, supplier }: { products: SearchedPr
 
   return (
     <div className="rounded-xl bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-sm font-semibold text-purple-700">
           Productos Potenciales a encontrar en proveedor ({products.length})
         </h2>
-        <button
-          onClick={handleSendEmail}
-          className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-medium text-white hover:bg-purple-700"
-        >
-          Enviar email
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handlePrepareHTML}
+            disabled={preparing}
+            className="rounded-lg border-2 border-purple-500 bg-purple-50 px-3 py-2 text-xs font-bold text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+          >
+            {preparing ? 'Preparando...' : 'HTML (Outlook)'}
+          </button>
+          <button
+            onClick={handleSendEmail}
+            className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-medium text-white hover:bg-purple-700"
+          >
+            Texto plano
+          </button>
+        </div>
       </div>
+      {prepareMsg && (
+        <div className="mb-3 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-center text-xs font-medium text-purple-700">
+          {prepareMsg}
+        </div>
+      )}
       <div className="flex flex-col gap-2">
         {products.map(sp => (
           <div key={sp.id}>

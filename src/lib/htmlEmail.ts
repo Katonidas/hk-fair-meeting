@@ -161,7 +161,7 @@ export function generateMeetingEmailHTML(
   // OTROS TEMAS A TENER EN CUENTA
   if (meeting.other_notes?.trim()) {
     L.push(`<br>`)
-    L.push(`<p style="${STYLE.p}"><strong>OTHER TOPICS TO CONSIDER:</strong></p>`)
+    L.push(`<p style="${STYLE.p}"><strong>&#9888; OTHER TOPICS TO CONSIDER:</strong></p>`)
     L.push(`<p style="${STYLE.p} white-space: pre-wrap;">${nl2br(meeting.other_notes.trim())}</p>`)
   }
 
@@ -175,50 +175,64 @@ export function generateMeetingEmailHTML(
 }
 
 export function generatePotentialProductsEmailHTML(
-  supplier: Supplier,
+  _supplier: Supplier,
   products: SearchedProduct[],
   userName: string,
   calcTargetCost: (brand: string, pvpr: number | null, marginTarget: string) => number | null,
 ): string {
   const L: string[] = []
 
+  const h1Underlined = 'color: #1a2f5f; font-size: 17px; margin: 24px 0 8px 0; text-decoration: underline; text-transform: uppercase; letter-spacing: 0.5px;'
+  const tblWrap = 'width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px;'
+  const tblTh = 'background: #1a2f5f; color: #fff; padding: 8px 10px; text-align: left; font-weight: bold; font-size: 11px; text-transform: uppercase; border: 1px solid #1a2f5f;'
+  const tblTd = 'padding: 8px 10px; border: 1px solid #dee2e6; vertical-align: top;'
+  const tblTdAlt = 'padding: 8px 10px; border: 1px solid #dee2e6; background: #f8f9fa; vertical-align: top;'
+
   L.push(`<div style="${STYLE.wrap}">`)
   L.push(`<p style="${STYLE.p}">Hello,</p>`)
-  L.push(`<p style="${STYLE.p}">Dear <strong>${esc(supplier.name)}</strong> team,</p>`)
   L.push(`<p style="${STYLE.p}">We are looking for the following products. To make our meeting more efficient, please have ready the products that you consider may fit both in terms of specifications and price, also taking into account the examples we send regarding shape or design.</p>`)
   L.push(`<p style="${STYLE.p}">Of course, if you have any alternative, we will be happy to see it. If you want to send us the information by email in advance, that would be great too. Please send us the best possible offer along with images and specifications of the product.</p>`)
-  L.push(`<p style="${STYLE.p}">Please remember that the prices provided must be based on and include our agreed terms and conditions:</p>`)
-  L.push(`<div style="${STYLE.terms}">${nl2br(getTerms())}</div>`)
 
-  L.push(`<h1 style="${STYLE.h1}">Products we are looking for</h1>`)
+  // TERMS & CONDITIONS
+  L.push(`<br>`)
+  L.push(`<h1 style="${h1Underlined}">Terms &amp; Conditions</h1>`)
+  L.push(`<p style="${STYLE.p}"><u>Please remember that the prices provided must be based on and include our agreed terms and conditions:</u></p>`)
+  L.push(bulletsToHTML(getTerms()))
+
+  // PRODUCTS WE ARE LOOKING FOR — table
+  L.push(`<br>`)
+  L.push(`<h1 style="${h1Underlined}">&#128269; PRODUCTS WE ARE LOOKING FOR</h1>`)
+
+  L.push(`<table style="${tblWrap}">`)
+  L.push(`<thead><tr>`)
+  L.push(`<th style="${tblTh}">Type</th>`)
+  L.push(`<th style="${tblTh}">Ref / Segment</th>`)
+  L.push(`<th style="${tblTh}">Specs</th>`)
+  L.push(`<th style="${tblTh}">Target Price</th>`)
+  L.push(`<th style="${tblTh}">Examples</th>`)
+  L.push(`</tr></thead>`)
+  L.push(`<tbody>`)
 
   products.forEach((sp, i) => {
-    const num = i + 1
+    const td = i % 2 === 0 ? tblTd : tblTdAlt
     const tc = calcTargetCost(sp.brand, sp.pvpr, sp.margin_target)
-    const title = `${num}. ${esc(sp.product_type || '')}${sp.ref_segment ? ` — ${esc(sp.ref_segment)}` : ''}${sp.brand ? ` (${esc(sp.brand)})` : ''}`
+    const specsInline = sp.main_specs ? sp.main_specs.replace(/\n+/g, ' | ') : '—'
 
-    L.push(`<div style="${STYLE.product}">`)
-    L.push(`<p style="${STYLE.productTitle}">${title}</p>`)
-
-    if (sp.main_specs) {
-      const specsInline = sp.main_specs.replace(/\n+/g, ' | ')
-      L.push(`<p style="${STYLE.p}"><span style="${STYLE.label}">SPECS</span> <span style="${STYLE.value}">${esc(specsInline)}</span></p>`)
-    }
-    if (tc != null) {
-      L.push(`<p style="${STYLE.p}"><span style="${STYLE.targetPrice}">TARGET PRICE: ${fmtPrice(tc, 'USD')}</span></p>`)
-    }
-    if (sp.examples) {
-      L.push(`<p style="${STYLE.p}"><span style="${STYLE.label}">EXAMPLES</span> <span style="${STYLE.value}">${nl2br(sp.examples)}</span></p>`)
-    }
-
-    L.push(`</div>`)
+    L.push(`<tr>`)
+    L.push(`<td style="${td}"><strong>${esc(sp.product_type || '—')}</strong>${sp.brand ? `<br><span style="color: #6c757d; font-size: 10px;">${esc(sp.brand)}</span>` : ''}</td>`)
+    L.push(`<td style="${td}">${esc(sp.ref_segment || '—')}</td>`)
+    L.push(`<td style="${td}">${esc(specsInline)}</td>`)
+    L.push(`<td style="${td}">${tc != null ? `<strong style="color: #155724; background: #d4edda; padding: 2px 6px; border-radius: 3px;">${fmtPrice(tc, 'USD')}</strong>` : '—'}</td>`)
+    L.push(`<td style="${td}">${sp.examples ? nl2br(sp.examples) : '—'}</td>`)
+    L.push(`</tr>`)
   })
 
-  L.push(`<div style="${STYLE.signature}">`)
+  L.push(`</tbody></table>`)
+
+  // Signature
+  L.push(`<br><br>`)
   L.push(`<p style="${STYLE.p}">Best regards,</p>`)
-  L.push(`<p style="${STYLE.signatureName}">${esc(userName)}</p>`)
-  L.push(`<p style="${STYLE.signatureCompany}">APPROX — HK Sources Fair 2026</p>`)
-  L.push(`</div>`)
+  L.push(`<p style="${STYLE.p} font-weight: bold; color: #1a2f5f;">${esc(userName)} - APPROX</p>`)
 
   L.push(`</div>`)
   return L.join('\n')
@@ -226,38 +240,58 @@ export function generatePotentialProductsEmailHTML(
 
 export function generateProductEmailHTML(
   product: Product,
-  supplierName: string,
+  _supplierName: string,
   userMessage: string,
   userName: string,
 ): string {
   const L: string[] = []
 
+  const h1Underlined = 'color: #1a2f5f; font-size: 17px; margin: 24px 0 8px 0; text-decoration: underline; text-transform: uppercase; letter-spacing: 0.5px;'
+  const tblWrap = 'width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px;'
+  const tblTh = 'background: #1a2f5f; color: #fff; padding: 8px 10px; text-align: left; font-weight: bold; font-size: 11px; text-transform: uppercase; border: 1px solid #1a2f5f;'
+  const tblTd = 'padding: 8px 10px; border: 1px solid #dee2e6; vertical-align: top;'
+
   L.push(`<div style="${STYLE.wrap}">`)
   L.push(`<p style="${STYLE.p}">Hello,</p>`)
-  L.push(`<p style="${STYLE.p}">Dear <strong>${esc(supplierName)}</strong> team,</p>`)
   L.push(`<p style="${STYLE.p}">I'm writing in reference to this product:</p>`)
 
-  L.push(`<div style="${STYLE.product}">`)
-  L.push(`<p style="${STYLE.productTitle}">${esc(product.product_type || '')}${product.item_model ? ` — ${esc(product.item_model)}` : ''}</p>`)
+  // PRODUCT — table
+  L.push(`<br>`)
+  L.push(`<h1 style="${h1Underlined}">&#128230; PRODUCT DETAILS</h1>`)
 
-  const row = (label: string, value: string) =>
-    `<p style="${STYLE.p}"><span style="${STYLE.label}">${label}</span> <span style="${STYLE.value}">${value}</span></p>`
+  const hasTargetPrice = product.target_price != null
 
-  if (product.price != null) L.push(row('PRICE', fmtPrice(product.price, product.price_currency)))
-  if (product.moq != null) L.push(row('MOQ', String(product.moq)))
-  if (product.features) L.push(row('FEATURES', esc(product.features)))
-  if (product.options) L.push(row('OPTIONS', esc(product.options)))
-  L.push(`</div>`)
+  L.push(`<table style="${tblWrap}">`)
+  L.push(`<thead><tr>`)
+  L.push(`<th style="${tblTh}">Type</th>`)
+  L.push(`<th style="${tblTh}">Model</th>`)
+  L.push(`<th style="${tblTh}">Price</th>`)
+  L.push(`<th style="${tblTh}">Features</th>`)
+  L.push(`<th style="${tblTh}">Options</th>`)
+  L.push(`<th style="${tblTh}">MOQ</th>`)
+  if (hasTargetPrice) L.push(`<th style="${tblTh}">Target Price</th>`)
+  L.push(`</tr></thead>`)
+  L.push(`<tbody><tr>`)
+  L.push(`<td style="${tblTd}">${esc(product.product_type || '—')}</td>`)
+  L.push(`<td style="${tblTd}"><strong>${esc(product.item_model || '—')}</strong></td>`)
+  L.push(`<td style="${tblTd}">${product.price != null ? fmtPrice(product.price, product.price_currency) : '—'}</td>`)
+  L.push(`<td style="${tblTd}">${esc(product.features || '—')}</td>`)
+  L.push(`<td style="${tblTd}">${esc(product.options || '—')}</td>`)
+  L.push(`<td style="${tblTd}">${product.moq != null ? product.moq : '—'}</td>`)
+  if (hasTargetPrice) {
+    L.push(`<td style="${tblTd}"><strong style="color: #155724; background: #d4edda; padding: 2px 6px; border-radius: 3px;">${fmtPrice(product.target_price, product.price_currency)}</strong></td>`)
+  }
+  L.push(`</tr></tbody></table>`)
 
   if (userMessage?.trim()) {
-    L.push(`<p style="${STYLE.p}; white-space: pre-wrap;">${nl2br(userMessage.trim())}</p>`)
+    L.push(`<br>`)
+    L.push(`<p style="${STYLE.p} white-space: pre-wrap;">${nl2br(userMessage.trim())}</p>`)
   }
 
-  L.push(`<div style="${STYLE.signature}">`)
+  // Signature
+  L.push(`<br><br>`)
   L.push(`<p style="${STYLE.p}">Best regards,</p>`)
-  L.push(`<p style="${STYLE.signatureName}">${esc(userName)}</p>`)
-  L.push(`<p style="${STYLE.signatureCompany}">APPROX — HK Sources Fair 2026</p>`)
-  L.push(`</div>`)
+  L.push(`<p style="${STYLE.p} font-weight: bold; color: #1a2f5f;">${esc(userName)} - APPROX</p>`)
 
   L.push(`</div>`)
   return L.join('\n')

@@ -11,6 +11,7 @@ import { buildMailtoUrl } from '@/lib/emailGenerator'
 import { getCCEmails } from '@/lib/constants'
 import { translateAndCorrect } from '@/lib/translate'
 import { fmtPrice } from '@/lib/price'
+import { generateProductEmailHTML, copyHTMLToClipboard } from '@/lib/htmlEmail'
 import type { ProductStatus, SampleStatus, UserName } from '@/types'
 
 type SortCol = 'supplierName' | 'supplierStand' | 'product_type' | 'item_model' | 'price' | 'target_price' | 'features' | 'moq' | 'options' | 'sample_status' | 'status'
@@ -804,6 +805,8 @@ function ProductEmailModal({
   const [freeText, setFreeText] = useState('')
   const [translating, setTranslating] = useState(false)
   const [supplierEmail, setSupplierEmail] = useState<string[]>([])
+  const [preparing, setPreparing] = useState(false)
+  const [prepareMsg, setPrepareMsg] = useState('')
 
   // Look up supplier email
   const supplier = useLiveQuery(async () => {
@@ -872,6 +875,32 @@ function ProductEmailModal({
     window.open(url, '_blank')
   }
 
+  async function handlePrepareHTML() {
+    setPreparing(true)
+    setPrepareMsg('')
+    try {
+      const currentUser = (localStorage.getItem('hk-fair-user') || 'Jesús') as UserName
+      const prodRaw = await db.products.get(product.id)
+      if (!prodRaw) return
+      const html = generateProductEmailHTML(prodRaw, product.supplierName, freeText, currentUser)
+      const copied = await copyHTMLToClipboard(html, buildBody())
+
+      setPrepareMsg(copied
+        ? 'HTML copiado. Abriendo Outlook... Pega con Ctrl+V.'
+        : 'No se pudo copiar. Abriendo Outlook igualmente...'
+      )
+
+      const subject = product.item_model || product.product_type || 'Product inquiry'
+      const cc = getCCEmails(currentUser)
+      const url = buildMailtoUrl(toEmails, cc, subject, '')
+
+      setTimeout(() => window.open(url, '_self'), 300)
+      setTimeout(() => setPrepareMsg(''), 8000)
+    } finally {
+      setPreparing(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
@@ -909,27 +938,45 @@ function ProductEmailModal({
             />
           </div>
 
+          {prepareMsg && (
+            <div className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-center text-xs font-medium text-purple-700">
+              {prepareMsg}
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-xs font-medium text-gray-600 hover:bg-gray-50"
             >
-              Guardar borrador
+              Borrador
             </button>
             <button
               onClick={handleTranslate}
               disabled={translating}
-              className="flex-1 rounded-xl border border-blue-200 bg-blue-50 py-3 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+              className="flex-1 rounded-xl border border-blue-200 bg-blue-50 py-3 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
             >
-              {translating ? 'Traduciendo...' : 'TRADUCIR / CORREGIR'}
+              {translating ? '...' : 'TRADUCIR'}
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handlePrepareHTML}
+              disabled={preparing}
+              className="flex-1 rounded-xl border-2 border-purple-500 bg-purple-50 py-3 text-xs font-bold text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+            >
+              {preparing ? 'Preparando...' : 'HTML (Outlook)'}
             </button>
             <button
               onClick={handleSend}
-              className="flex-1 rounded-xl bg-primary py-3 text-sm font-bold text-white hover:bg-primary-light"
+              className="flex-1 rounded-xl bg-primary py-3 text-xs font-bold text-white hover:bg-primary-light"
             >
-              ENVIAR EMAIL
+              Texto plano
             </button>
           </div>
+          <p className="text-center text-[10px] text-gray-500">
+            <strong>HTML (Outlook)</strong>: copia el email con formato y abre Outlook. Pega con Ctrl+V.
+          </p>
         </div>
       </div>
     </div>
