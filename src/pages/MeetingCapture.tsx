@@ -809,10 +809,9 @@ function SuggestedProductsModal({ products, onClose }: { products: SearchedProdu
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 mx-2"
-        onClick={e => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-800">Productos sugeridos</h3>

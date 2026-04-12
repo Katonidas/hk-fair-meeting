@@ -880,8 +880,8 @@ export function PotentialProductsSection({ products, supplier, supplierId }: { p
 
       {/* Picker para añadir manualmente */}
       {showAddPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowAddPicker(false)}>
-          <div className="w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-2xl bg-white p-5" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-2xl bg-white p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-bold text-gray-800">Añadir producto deseado</h3>
               <button onClick={() => setShowAddPicker(false)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">✕</button>

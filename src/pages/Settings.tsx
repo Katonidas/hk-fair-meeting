@@ -230,8 +230,8 @@ export default function Settings({ currentUser }: Props) {
         </button>
 
         {showHelp && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowHelp(false)}>
-            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 mx-4" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 mx-4">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-bold text-gray-800">Instrucciones de uso</h3>
                 <button onClick={() => setShowHelp(false)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">&#10005;</button>

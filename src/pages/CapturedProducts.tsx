@@ -504,10 +504,9 @@ export function ProductDetailModal({
   const fieldCls = 'w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-primary focus:outline-none'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div
         className="max-h-[95vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 mx-2"
-        onClick={e => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-800">{product.product_type || 'Producto'}{product.item_model ? ` — ${product.item_model}` : ''}</h3>
@@ -903,10 +902,9 @@ function ProductEmailModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
       <div
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 mx-2"
-        onClick={e => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-800">Email del producto</h3>
@@ -1106,10 +1104,9 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
   const fieldCls = 'w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-primary focus:outline-none'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
       <div
         className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5"
-        onClick={e => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-800">Nuevo producto</h3>
