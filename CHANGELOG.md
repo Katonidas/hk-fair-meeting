@@ -1,5 +1,44 @@
 # Changelog — HK Fair Meeting
 
+## 2026-04-13 — Protección anti-pérdida de datos + QA completo (4 agentes)
+
+### Causa raíz de la pérdida de productos (ARREGLADO)
+- `pullProducts`, `pullMeetings`, `pullSuppliers` y `pullSearchedProducts`
+  tenían lógica de auto-eliminación: si un registro existía local pero no en
+  Supabase, lo borraban asumiendo "borrado en otro dispositivo". Pero si el
+  push fallaba por red inestable, el producto nunca llegaba a Supabase y 30s
+  después el pull lo eliminaba localmente. **Eliminada toda auto-eliminación.**
+- Los borrados en páginas (`MeetingCapture`, `CapturedProducts`,
+  `SearchedProducts`, `SupplierDetail`) llamaban a `db.xxx.delete()`
+  directamente sin tombstones — los registros reaparecían en el siguiente
+  sync. **Centralizado todo en funciones de `sync.ts`** (`deleteProduct`,
+  `deleteMeeting`, `deleteSearchedProduct`, etc.) que hacen backup +
+  tombstone + delete remoto.
+- Tabla `backups` (Dexie v12) guarda copia de todo registro antes de borrarse.
+
+### Version gate automático
+- Timestamp de build inyectado por Vite en cada deploy.
+- Primer dispositivo que carga la nueva versión actualiza Supabase; los demás
+  quedan bloqueados con pantalla "ACTUALIZAR AHORA" que limpia SW + cachés.
+- Cache de `min_app_version` en localStorage para bloquear offline.
+- `app_config` excluida del cache del service worker (`NetworkOnly`).
+- `Cache-Control: no-store` en `index.html` y `registerSW.js` (vercel.json).
+
+### Email backup en Supabase Storage
+- Cada previsualización y envío guarda un `.txt` en Supabase Storage
+  (`email-backups/fecha_hora_proveedor_tipo.txt`).
+
+### Bugs arreglados por QA (4 agentes en paralelo)
+- `handleOpenEmail` / `handlePrepareEmail`: ahora hacen `await` de la
+  persistencia ANTES de `window.open`.
+- `handleTranslate`: traducción atómica con `Promise.all` y rollback si falla.
+- `MeetingCapture` notes `useEffect`: guard `notesInitialized` para que Dexie
+  re-emissions no machaquen lo que el usuario está tecleando.
+- Botón "Volver" en MeetingCapture: ahora hace `autoSave()` antes de navegar.
+- `fromSupabaseSearchedProduct` relevance: `Number()` + `includes()` en vez de
+  `===` estricto (soporta strings de Supabase).
+- NewMeeting "INICIAR REUNION": guard `creatingMeeting` contra doble-click.
+
 ## 2026-04-12 — Sync productos deseados + buscador multi-palabra + tabla potenciales rediseñada
 
 ### Bug crítico arreglado: sync de `searched_products`
