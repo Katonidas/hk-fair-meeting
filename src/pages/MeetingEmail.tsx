@@ -6,6 +6,7 @@ import { getCCEmails } from '@/lib/constants'
 import { generateEmailSubject, generateEmailBody, buildMailtoUrl } from '@/lib/emailGenerator'
 import { translateAndCorrect } from '@/lib/translate'
 import { generateMeetingEmailHTML, copyHTMLToClipboard } from '@/lib/htmlEmail'
+import { saveEmailBackup } from '@/lib/emailBackup'
 import type { UserName } from '@/types'
 
 interface Props {
@@ -58,10 +59,21 @@ export default function MeetingEmail({ currentUser }: Props) {
   function handleOpenEmail() {
     const toList = toEmails.split(',').map(e => e.trim()).filter(Boolean)
     const url = buildMailtoUrl(toList, ccEmails, subject, body)
+
     window.open(url, '_self')
 
-    // Mark email as generated
-    if (id && meeting) {
+    // Mark email as generated + backup
+    if (id && meeting && supplier) {
+      // Backup definitivo (texto plano) en Supabase Storage
+      void saveEmailBackup({
+        supplierName: supplier.name,
+        to: toEmails,
+        cc: ccEmails.join(', '),
+        subject,
+        body,
+        type: 'enviado-textoplano',
+        user: currentUser,
+      })
       const now = new Date().toISOString()
       db.meetings.update(id, {
         email_generated: true,
@@ -81,6 +93,19 @@ export default function MeetingEmail({ currentUser }: Props) {
     setPreparing(true)
     setPrepareMsg('')
     try {
+      // Backup definitivo (HTML) en Supabase Storage
+      if (supplier) {
+        void saveEmailBackup({
+          supplierName: supplier.name,
+          to: toEmails,
+          cc: ccEmails.join(', '),
+          subject,
+          body,
+          type: 'enviado-html',
+          user: currentUser,
+        })
+      }
+
       // Generate HTML email matching the current body content
       // (use the current editable body as plain text fallback)
       const html = generateMeetingEmailHTML(supplier, meeting, products)
@@ -140,6 +165,18 @@ export default function MeetingEmail({ currentUser }: Props) {
 
   async function handleSaveDraft() {
     if (!id) return
+    // Backup del borrador en Supabase Storage
+    if (supplier) {
+      void saveEmailBackup({
+        supplierName: supplier.name,
+        to: toEmails,
+        cc: ccEmails.join(', '),
+        subject,
+        body,
+        type: 'borrador',
+        user: currentUser,
+      })
+    }
     await db.meetings.update(id, {
       email_generated: true,
       updated_at: new Date().toISOString(),
