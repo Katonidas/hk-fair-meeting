@@ -61,21 +61,68 @@ export default function SearchedProducts() {
   const [viewingProduct, setViewingProduct] = useState<SearchedProduct | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importResult, setImportResult] = useState<string | null>(null)
+  // Estado de orden de la tabla. Por defecto ordenamos por tipo A→Z.
+  type SortCol = 'brand' | 'product_type' | 'ref_segment' | 'main_specs' | 'target_cost' | 'margin_target' | 'pvpr' | 'model_interno' | 'relevance'
+  const [sortCol, setSortCol] = useState<SortCol>('product_type')
+  const [sortAsc, setSortAsc] = useState(true)
 
+  // Filtro multi-palabra: si el usuario escribe "approx audio", buscamos
+  // productos donde TODAS las palabras (parciales) aparezcan en algún
+  // campo. Por ejemplo: marca="APPROX" + tipo="Audio" → match. Cada palabra
+  // se compara contra el "haystack" concatenado de los campos relevantes.
   const products = useLiveQuery(async () => {
     const all = await db.searched_products.toArray()
-    if (!search) return all.sort((a, b) => a.product_type.localeCompare(b.product_type))
-    const q = normalize(search)
-    return all
-      .filter(p =>
-        normalize(p.brand).includes(q) ||
-        normalize(p.product_type).includes(q) ||
-        normalize(p.ref_segment).includes(q) ||
-        normalize(p.model_interno).includes(q) ||
-        normalize(p.main_specs).includes(q)
-      )
-      .sort((a, b) => a.product_type.localeCompare(b.product_type))
-  }, [search])
+
+    // Filtrado
+    const filtered = (() => {
+      const q = search.trim()
+      if (!q) return all
+      const tokens = normalize(q).split(/\s+/).filter(Boolean)
+      if (tokens.length === 0) return all
+      return all.filter(p => {
+        const haystack = normalize([
+          p.brand,
+          p.product_type,
+          p.ref_segment,
+          p.model_interno,
+          p.main_specs,
+        ].filter(Boolean).join(' '))
+        // Todas las palabras tienen que aparecer (parcial = substring)
+        return tokens.every(t => haystack.includes(t))
+      })
+    })()
+
+    // Orden
+    const dir = sortAsc ? 1 : -1
+    const sorted = [...filtered].sort((a, b) => {
+      let cmp = 0
+      switch (sortCol) {
+        case 'brand': cmp = (a.brand || '').localeCompare(b.brand || ''); break
+        case 'product_type': cmp = (a.product_type || '').localeCompare(b.product_type || ''); break
+        case 'ref_segment': cmp = (a.ref_segment || '').localeCompare(b.ref_segment || ''); break
+        case 'main_specs': cmp = (a.main_specs || '').localeCompare(b.main_specs || ''); break
+        case 'target_cost': cmp = (a.target_cost ?? 0) - (b.target_cost ?? 0); break
+        case 'margin_target': {
+          const av = parseFloat((a.margin_target || '0').replace('%', '').replace(',', '.'))
+          const bv = parseFloat((b.margin_target || '0').replace('%', '').replace(',', '.'))
+          cmp = (isNaN(av) ? 0 : av) - (isNaN(bv) ? 0 : bv)
+          break
+        }
+        case 'pvpr': cmp = (a.pvpr ?? 0) - (b.pvpr ?? 0); break
+        case 'model_interno': cmp = (a.model_interno || '').localeCompare(b.model_interno || ''); break
+        case 'relevance': cmp = (a.relevance ?? 2) - (b.relevance ?? 2); break
+      }
+      return cmp * dir
+    })
+
+    return sorted
+  }, [search, sortCol, sortAsc])
+
+  function toggleSort(col: SortCol) {
+    if (col === sortCol) setSortAsc(!sortAsc)
+    else { setSortCol(col); setSortAsc(true) }
+  }
+  const arrow = (col: SortCol) => sortCol === col ? (sortAsc ? ' ↑' : ' ↓') : ''
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -253,10 +300,12 @@ export default function SearchedProducts() {
           <p className={`mb-3 text-xs ${importResult.startsWith('Error') ? 'text-red-500' : 'text-green-600'}`}>{importResult}</p>
         )}
 
-        {/* Search */}
+        {/* Search — multi-palabra: separar con espacios para que TODAS deban
+            aparecer (parcialmente) en algún campo. Ej: "approx audio" filtra
+            productos que contengan ambas palabras en marca/tipo/ref/specs/modelo. */}
         <input
-          type="text"
-          placeholder="Buscar por marca, tipo, specs, modelo..."
+          type="search"
+          placeholder="Buscar (varias palabras: ej. 'approx audio')"
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm focus:border-primary focus:outline-none"
@@ -274,14 +323,14 @@ export default function SearchedProducts() {
             <table className="w-full min-w-[900px] text-xs">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="px-2 py-2 text-left font-semibold text-gray-500">Marca</th>
-                  <th className="px-2 py-2 text-left font-semibold text-gray-500">Tipo Producto</th>
-                  <th className="px-2 py-2 text-left font-semibold text-gray-500 w-36">Ref.</th>
-                  <th className="px-2 py-2 text-left font-semibold text-gray-500">Specs</th>
-                  <th className="px-2 py-2 text-right font-bold text-gray-700">Target Compra USD</th>
-                  <th className="px-2 py-2 text-right font-semibold text-gray-500 w-20">Margen %</th>
-                  <th className="px-2 py-2 text-right font-semibold text-gray-500 w-20">PVPR €</th>
-                  <th className="px-2 py-2 text-left font-semibold text-gray-500">Modelo</th>
+                  <th onClick={() => toggleSort('brand')} className="cursor-pointer select-none px-2 py-2 text-left font-semibold text-gray-500 hover:text-primary">Marca{arrow('brand')}</th>
+                  <th onClick={() => toggleSort('product_type')} className="cursor-pointer select-none px-2 py-2 text-left font-semibold text-gray-500 hover:text-primary">Tipo Producto{arrow('product_type')}</th>
+                  <th onClick={() => toggleSort('ref_segment')} className="cursor-pointer select-none px-2 py-2 text-left font-semibold text-gray-500 w-36 hover:text-primary">Ref.{arrow('ref_segment')}</th>
+                  <th onClick={() => toggleSort('main_specs')} className="cursor-pointer select-none px-2 py-2 text-left font-semibold text-gray-500 hover:text-primary">Specs{arrow('main_specs')}</th>
+                  <th onClick={() => toggleSort('target_cost')} className="cursor-pointer select-none px-2 py-2 text-right font-bold text-gray-700 hover:text-primary">Target Compra USD{arrow('target_cost')}</th>
+                  <th onClick={() => toggleSort('margin_target')} className="cursor-pointer select-none px-2 py-2 text-right font-semibold text-gray-500 w-20 hover:text-primary">Margen %{arrow('margin_target')}</th>
+                  <th onClick={() => toggleSort('pvpr')} className="cursor-pointer select-none px-2 py-2 text-right font-semibold text-gray-500 w-20 hover:text-primary">PVPR €{arrow('pvpr')}</th>
+                  <th onClick={() => toggleSort('model_interno')} className="cursor-pointer select-none px-2 py-2 text-left font-semibold text-gray-500 hover:text-primary">Modelo{arrow('model_interno')}</th>
                   <th className="px-2 py-2 text-center font-semibold text-gray-500 w-20">Candidatos</th>
                   <th className="px-2 py-2 text-center font-semibold text-gray-500 w-16"></th>
                 </tr>
