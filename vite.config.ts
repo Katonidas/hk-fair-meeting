@@ -10,6 +10,11 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      // Forzar que el SW nuevo tome control inmediato y limpie cachés
+      // viejas. Sin esto, los usuarios pueden quedarse atascados en una
+      // versión cacheada con bugs ya arreglados (ej. el botón de email
+      // que no marcaba la reunión como enviada).
+      injectRegister: 'auto',
       manifest: {
         name: 'HK Fair Meeting - APPROX',
         short_name: 'HK Fair',
@@ -17,7 +22,7 @@ export default defineConfig({
         theme_color: '#1e3a5f',
         background_color: '#ffffff',
         display: 'standalone',
-        orientation: 'portrait',
+        orientation: 'any',
         scope: '/',
         start_url: '/',
         icons: [
@@ -28,6 +33,12 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // skipWaiting + clientsClaim → el SW nuevo se activa de inmediato
+        // sin esperar a que el usuario cierre todas las pestañas.
+        skipWaiting: true,
+        clientsClaim: true,
+        // Limpia cachés de versiones anteriores al activarse.
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/glutewwayemuftmjvbcs\.supabase\.co\/.*/i,

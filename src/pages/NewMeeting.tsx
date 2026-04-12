@@ -36,6 +36,9 @@ export default function NewMeeting({ currentUser }: Props) {
       business_card_photo_url: '',
       email_generated: false,
       email_sent_at: null,
+      email_to_draft: '',
+      email_subject_draft: '',
+      email_body_draft: '',
       created_at: now,
       updated_at: now,
       synced_at: null,
@@ -50,9 +53,9 @@ export default function NewMeeting({ currentUser }: Props) {
   return (
     <div className="flex min-h-screen flex-col bg-gray-light">
       <header className="sticky top-0 z-10 border-b border-gray-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="mx-auto flex max-w-3xl items-center gap-3">
+          <button onClick={() => navigate(-1)} className="rounded-lg p-3 text-gray-500 hover:bg-gray-100" aria-label="Volver atrás">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
@@ -61,7 +64,7 @@ export default function NewMeeting({ currentUser }: Props) {
       </header>
 
       {/* Toggle */}
-      <div className="flex gap-2 px-4 pt-4">
+      <div className="mx-auto flex w-full max-w-3xl gap-2 px-4 pt-4">
         <button
           onClick={() => setMode('select')}
           className={`flex-1 rounded-lg py-3 text-sm font-medium transition-colors ${
@@ -81,16 +84,17 @@ export default function NewMeeting({ currentUser }: Props) {
       </div>
 
       {mode === 'select' ? (
-        <div className="flex-1 px-4 py-3">
+        <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-3">
           <input
-            type="text"
+            type="search"
+            enterKeyHint="search"
             placeholder="Buscar por nombre, stand o producto..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm focus:border-primary focus:outline-none"
             autoFocus
           />
-          <div className="flex flex-col gap-2">
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {suppliers?.map(s => (
               <button
                 key={s.id}
@@ -103,7 +107,7 @@ export default function NewMeeting({ currentUser }: Props) {
                     Stand {s.stand} · {s.assigned_person || '—'} · {s.product_type || '—'}
                   </p>
                 </div>
-                <svg className="h-5 w-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-5 w-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
@@ -140,38 +144,44 @@ function NewSupplierForm({
     if (!name.trim() || !stand.trim()) return
     setSaving(true)
 
-    const id = uuid()
-    const now = new Date().toISOString()
-    await db.suppliers.add({
-      id,
-      name: name.trim(),
-      stand: stand.trim(),
-      assigned_person: currentUser,
-      product_type: '',
-      emails: emails.split(',').map(e => e.trim()).filter(Boolean),
-      phone: phone.trim(),
-      relevance: 2,
-      visit_day: '',
-      visit_slot: '',
-      visited: false,
-      pending_topics: '',
-      interesting_products: '',
-      has_catalogue: false,
-      current_products: '',
-      supplier_notes: '',
-      is_new: true,
-      updated_at: now,
-      updated_by: currentUser,
-      created_at: now,
-      synced_at: null,
-    })
+    try {
+      const id = uuid()
+      const now = new Date().toISOString()
+      await db.suppliers.add({
+        id,
+        name: name.trim(),
+        stand: stand.trim(),
+        assigned_person: currentUser,
+        product_type: '',
+        emails: emails.split(',').map(e => e.trim()).filter(Boolean),
+        phone: phone.trim(),
+        relevance: 2,
+        visit_day: '',
+        visit_slot: '',
+        visited: false,
+        pending_topics: '',
+        interesting_products: '',
+        has_catalogue: false,
+        current_products: '',
+        supplier_notes: '',
+        is_new: true,
+        updated_at: now,
+        updated_by: currentUser,
+        created_at: now,
+        synced_at: null,
+      })
 
-    await onCreated(id)
+      await onCreated(id)
+    } catch (err) {
+      console.error('[NewSupplierForm]', err)
+      window.alert(`Error al crear el proveedor: ${err instanceof Error ? err.message : 'desconocido'}`)
+      setSaving(false)
+    }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex-1 px-4 py-4">
-      <div className="flex flex-col gap-4 rounded-xl bg-white p-4 shadow-sm">
+    <form onSubmit={handleSubmit} className="mx-auto w-full max-w-3xl flex-1 px-4 py-4">
+      <div className="grid gap-4 rounded-xl bg-white p-4 shadow-sm md:grid-cols-2">
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500">Nombre del proveedor *</label>
           <input
@@ -195,10 +205,11 @@ function NewSupplierForm({
             placeholder="Ej: 3F-A12"
           />
         </div>
-        <div>
+        <div className="md:col-span-2">
           <label className="mb-1 block text-xs font-medium text-gray-500">Email(s) — separados por coma</label>
           <input
             type="text"
+            inputMode="email"
             value={emails}
             onChange={e => setEmails(e.target.value)}
             className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:border-primary focus:outline-none"
@@ -209,6 +220,7 @@ function NewSupplierForm({
           <label className="mb-1 block text-xs font-medium text-gray-500">Teléfono</label>
           <input
             type="tel"
+            inputMode="tel"
             value={phone}
             onChange={e => setPhone(e.target.value)}
             className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:border-primary focus:outline-none"
@@ -218,7 +230,7 @@ function NewSupplierForm({
         <button
           type="submit"
           disabled={saving || !name.trim() || !stand.trim()}
-          className="w-full rounded-lg bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark disabled:opacity-50"
+          className="w-full rounded-lg bg-primary py-4 text-base font-bold text-white transition-colors hover:bg-primary-light active:bg-primary-dark disabled:opacity-50 md:col-span-2"
         >
           {saving ? 'Creando...' : 'Crear y continuar'}
         </button>

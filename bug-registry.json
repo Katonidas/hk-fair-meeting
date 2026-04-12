@@ -1,5 +1,16 @@
 {
   "project": "hk-fair-meeting",
-  "last_updated": "2026-04-08",
-  "bugs": []
+  "last_updated": "2026-04-10",
+  "bugs": [
+    {
+      "id": "BUG-001",
+      "title": "xlsx (SheetJS) — vulnerabilidades high sin fix en npm",
+      "severity": "high",
+      "status": "accepted-risk",
+      "detected_at": "2026-04-10",
+      "qa_round": 1,
+      "description": "npm audit reporta 2 vulnerabilidades high en xlsx@0.18.5: Prototype Pollution (GHSA-4r6h-8v6p-xvw6) y ReDoS (GHSA-5pgg-2g8v-p4x9). SheetJS dejó de publicar en npm registry hace años; las versiones parcheadas solo están en su CDN propio (https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz).",
+      "fix": "Aceptado el riesgo. El vector de ataque requiere parsear un .xlsx malicioso, pero la app solo importa archivos del propio equipo APPROX en Settings.tsx. Si en el futuro se permitiera subir archivos de proveedores externos, migrar a exceljs o instalar xlsx desde el CDN oficial de SheetJS."
+    }
+  ]
 }

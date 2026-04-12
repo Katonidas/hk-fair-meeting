@@ -1,4 +1,12 @@
-import type { Meeting, Supplier, Product } from '@/types'
+import type { Meeting, Supplier, Product, Relevance } from '@/types'
+
+// English labels para el email al proveedor (la app es bilingüe: UI en
+// castellano, comunicación al supplier en inglés).
+const PRODUCT_RELEVANCE_LABELS_EN: Record<Relevance, string> = {
+  1: 'MUST HAVE',
+  2: 'IMPORTANT',
+  3: 'OPTIONAL',
+}
 
 export function generateEmailSubject(supplier: Supplier): string {
   return `${supplier.name} - APPROX - Meeting HK Fair`
@@ -48,7 +56,9 @@ export function generateEmailBody(
     lines.push('')
 
     for (const p of products) {
+      const relevance: Relevance = p.relevance ?? 2
       lines.push(`ITEM: ${p.item_model || '—'}`)
+      lines.push(`  PRIORITY: ${relevance}. ${PRODUCT_RELEVANCE_LABELS_EN[relevance]}`)
       lines.push(`  PRICE: ${p.price ? `$${p.price} ${p.price_currency}` : '—'}`)
       lines.push(`  FEATURES: ${p.features || '—'}`)
       lines.push(`  MOQ: ${p.moq || '—'}`)
@@ -102,10 +112,28 @@ export function buildMailtoUrl(
   subject: string,
   body: string,
 ): string {
-  const params = new URLSearchParams()
-  if (cc.length) params.set('cc', cc.join(','))
-  params.set('subject', subject)
-  params.set('body', body)
+  // RFC 6068-compliant mailto URL.
+  //
+  // Notes for Thunderbird compatibility (Carlos usa Thunderbird):
+  // - URLSearchParams codifica los espacios como `+`, lo que rompe el parseo
+  //   de Thunderbird en el subject/body. Usamos encodeURIComponent (%20).
+  // - Cada dirección de email se codifica individualmente.
+  // - Añadimos `to` también como query param además de en la ruta. Algunas
+  //   versiones/configuraciones de Thunderbird solo leen el destinatario
+  //   desde el parámetro `to=` y dejan el campo TO vacío si va únicamente
+  //   en la ruta del mailto.
 
-  return `mailto:${to.join(',')}?${params.toString()}`
+  const encodeEmailList = (list: string[]) =>
+    list.map(e => encodeURIComponent(e.trim())).filter(Boolean).join(',')
+
+  const toEncoded = encodeEmailList(to)
+  const ccEncoded = encodeEmailList(cc)
+
+  const queryParts: string[] = []
+  if (toEncoded) queryParts.push(`to=${toEncoded}`)
+  if (ccEncoded) queryParts.push(`cc=${ccEncoded}`)
+  queryParts.push(`subject=${encodeURIComponent(subject)}`)
+  queryParts.push(`body=${encodeURIComponent(body)}`)
+
+  return `mailto:${toEncoded}?${queryParts.join('&')}`
 }

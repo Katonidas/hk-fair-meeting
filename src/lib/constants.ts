@@ -1,4 +1,14 @@
-import type { UserName } from '@/types'
+import type { UserName, Relevance } from '@/types'
+
+// Etiquetas de importancia para productos deseados.
+// 1 = más importante, 3 = menos importante (criterio definido por CEO).
+export const PRODUCT_RELEVANCE_LABELS: Record<Relevance, string> = {
+  1: 'Imprescindible',
+  2: 'Importante',
+  3: 'Opcional',
+}
+
+export const PRODUCT_RELEVANCE_LEVELS: Relevance[] = [1, 2, 3]
 
 export const USERS: UserName[] = ['Carlos', 'Jesús', 'Tote', 'Jose Luis']
 

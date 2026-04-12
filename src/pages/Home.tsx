@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
+import { syncNow } from '@/lib/sync'
+import { useSyncStatus } from '@/hooks/useSyncStatus'
+import { formatLocalTime, isToday } from '@/lib/dates'
 import type { UserName } from '@/types'
 
 interface Props {
@@ -17,12 +20,14 @@ export default function Home({ currentUser, onLogout }: Props) {
   const navigate = useNavigate()
 
   const todayMeetings = useLiveQuery(async () => {
-    const today = new Date().toISOString().slice(0, 10)
+    // `isToday` compara en zona horaria local del dispositivo (en HK = UTC+8).
+    // Si usáramos toISOString().slice(0,10) las reuniones de las primeras
+    // horas de la mañana en HK quedarían atribuidas al día anterior.
     const meetings = await db.meetings
       .where('user_name')
       .equals(currentUser)
       .toArray()
-    const todayOnly = meetings.filter(m => m.visited_at.slice(0, 10) === today)
+    const todayOnly = meetings.filter(m => isToday(m.visited_at))
     todayOnly.sort((a, b) => b.visited_at.localeCompare(a.visited_at))
 
     const enriched = await Promise.all(
@@ -48,7 +53,7 @@ export default function Home({ currentUser, onLogout }: Props) {
     <div className="flex min-h-screen flex-col bg-gray-light">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b border-gray-200 bg-white px-4 py-3">
-        <div className="flex items-center justify-between">
+        <div className="mx-auto flex max-w-3xl items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-primary">HK Fair</h1>
             <p className="text-xs text-gray-400">{currentUser}</p>
@@ -57,20 +62,22 @@ export default function Home({ currentUser, onLogout }: Props) {
             <SyncIndicator />
             <button
               onClick={() => navigate('/settings')}
-              className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
+              className="rounded-lg p-3 text-gray-400 hover:bg-gray-100"
               title="Ajustes"
+              aria-label="Abrir ajustes"
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </button>
             <button
               onClick={onLogout}
-              className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
+              className="rounded-lg p-3 text-gray-400 hover:bg-gray-100"
               title="Cambiar usuario"
+              aria-label="Cambiar usuario"
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
             </button>
@@ -79,17 +86,23 @@ export default function Home({ currentUser, onLogout }: Props) {
       </header>
 
       {/* New Meeting Button */}
-      <div className="px-4 pt-4">
+      <div className="mx-auto w-full max-w-3xl px-4 pt-4">
         <button
           onClick={() => navigate('/meeting/new')}
           className="w-full rounded-xl bg-primary py-4 text-lg font-bold text-white shadow-md transition-colors hover:bg-primary-light active:bg-primary-dark"
         >
           + NUEVA REUNIÓN
         </button>
+        <button
+          onClick={() => navigate('/route')}
+          className="mt-2 w-full rounded-xl border border-primary bg-white py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/5"
+        >
+          🗺 GENERADOR DE RUTA
+        </button>
       </div>
 
       {/* Tabs */}
-      <div className="mt-4 flex border-b border-gray-200 px-4">
+      <div className="mx-auto mt-4 flex w-full max-w-3xl border-b border-gray-200 px-4">
         <button
           onClick={() => setTab('meetings')}
           className={`flex-1 border-b-2 pb-2 text-sm font-medium transition-colors ${
@@ -113,13 +126,14 @@ export default function Home({ currentUser, onLogout }: Props) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 px-4 py-3">
+      <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-3">
         {tab === 'meetings' ? (
           <MeetingsList meetings={todayMeetings} navigate={navigate} />
         ) : (
           <>
             <input
-              type="text"
+              type="search"
+              enterKeyHint="search"
               placeholder="Buscar proveedor o stand..."
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -134,11 +148,35 @@ export default function Home({ currentUser, onLogout }: Props) {
 }
 
 function SyncIndicator() {
+  const status = useSyncStatus()
+
+  // Indicador conectado al motor real de sync (src/lib/sync.ts).
+  // Click → fuerza un sync manual inmediato.
+  const config = {
+    idle:    { bg: 'bg-green-50',  dot: 'bg-green-500',  text: 'text-green-600',  label: 'Sync' },
+    syncing: { bg: 'bg-blue-50',   dot: 'bg-blue-500',   text: 'text-blue-600',   label: 'Sync…' },
+    error:   { bg: 'bg-red-50',    dot: 'bg-red-500',    text: 'text-red-600',    label: 'Sync ⚠' },
+    offline: { bg: 'bg-gray-100',  dot: 'bg-gray-400',   text: 'text-gray-500',   label: 'Offline' },
+  }[status.state]
+
+  const tooltip =
+    status.state === 'error'
+      ? `Error: ${status.error}`
+      : status.state === 'idle' && status.lastSyncAt
+        ? `Última sync: ${new Date(status.lastSyncAt).toLocaleTimeString('es-ES')}`
+        : status.state === 'syncing'
+          ? 'Sincronizando…'
+          : 'Sin conexión / Supabase no configurado'
+
   return (
-    <div className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-xs text-green-600">
-      <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
-      Sync
-    </div>
+    <button
+      onClick={() => void syncNow()}
+      title={tooltip}
+      className={`flex items-center gap-1 rounded-full ${config.bg} px-2 py-1 text-xs ${config.text} transition-colors`}
+    >
+      <div className={`h-1.5 w-1.5 rounded-full ${config.dot} ${status.state === 'syncing' ? 'animate-pulse' : ''}`} />
+      {config.label}
+    </button>
   )
 }
 
@@ -167,7 +205,7 @@ function MeetingsList({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="grid gap-2 md:grid-cols-2">
       {meetings.map(m => (
         <button
           key={m.id}
@@ -177,7 +215,7 @@ function MeetingsList({
           <div className="flex-1">
             <p className="font-semibold text-gray-800">{m.supplier?.name || 'Proveedor'}</p>
             <p className="text-xs text-gray-400">
-              Stand {m.supplier?.stand} · {new Date(m.visited_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+              Stand {m.supplier?.stand} · {formatLocalTime(m.visited_at)}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -224,7 +262,7 @@ function SuppliersList({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
       {suppliers.map(s => {
         const isMine = s.assigned_person === currentUser || s.assigned_person === 'Todos'
         const statusColor = s.visited
