@@ -1,47 +1,46 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { APP_VERSION, getMinAppVersion, forceAppUpdate } from '@/lib/version'
+import { APP_BUILD_TS, isOutdated, registerCurrentVersion, forceAppUpdate } from '@/lib/version'
 
 /**
- * Componente que envuelve toda la app. Al montar, comprueba la versión
- * contra Supabase. Si el dispositivo está desactualizado, muestra una
- * pantalla de bloqueo COMPLETA que impide usar la app hasta que el
- * usuario pulse "ACTUALIZAR". Al pulsar, se desregistran los SW, se
- * limpian cachés y se fuerza un hard reload.
+ * Envuelve toda la app. Al montar:
  *
- * Si no hay conexión o no hay tabla app_config, deja pasar (fail-open)
- * para no bloquear a nadie en modo offline.
+ * 1. Registra nuestra versión en Supabase (si somos el build más nuevo,
+ *    actualiza min_app_version para que los demás se enteren)
+ * 2. Comprueba si NOSOTROS estamos desactualizados
+ * 3. Si sí → pantalla de bloqueo completa con botón ACTUALIZAR
+ * 4. Re-comprueba cada 60s por si se despliega una versión nueva mientras
+ *    el usuario está usando la app
+ *
+ * Si no hay conexión o no existe la tabla app_config → fail-open (no
+ * bloquear). El modo offline sigue funcionando como siempre.
  */
 export function VersionGate({ children }: { children: ReactNode }) {
   const [checking, setChecking] = useState(true)
   const [outdated, setOutdated] = useState(false)
   const [updating, setUpdating] = useState(false)
-  const [minVersion, setMinVersion] = useState<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    async function check() {
-      const min = await getMinAppVersion()
+    async function init() {
+      // Primero registramos NUESTRA versión (si somos nuevos, avisamos a los demás)
+      await registerCurrentVersion()
+      // Luego comprobamos si NOSOTROS estamos viejos
+      const old = await isOutdated()
       if (cancelled) return
-      if (min !== null && APP_VERSION < min) {
-        setMinVersion(min)
-        setOutdated(true)
-      }
+      setOutdated(old)
       setChecking(false)
     }
-    check()
+    init()
     return () => { cancelled = true }
   }, [])
 
-  // Check cada 60s por si el admin sube la versión mínima mientras el
-  // usuario está usando la app (sin necesidad de recargar).
+  // Re-check periódico (60s) para detectar deploys mientras el usuario
+  // tiene la app abierta. Si se detecta versión nueva → bloquear.
   useEffect(() => {
-    if (outdated) return // ya bloqueado
+    if (outdated) return
     const interval = setInterval(async () => {
-      const min = await getMinAppVersion()
-      if (min !== null && APP_VERSION < min) {
-        setMinVersion(min)
-        setOutdated(true)
-      }
+      const old = await isOutdated()
+      if (old) setOutdated(true)
     }, 60_000)
     return () => clearInterval(interval)
   }, [outdated])
@@ -50,15 +49,11 @@ export function VersionGate({ children }: { children: ReactNode }) {
     setUpdating(true)
     try {
       await forceAppUpdate()
-    } catch (err) {
-      console.error('[VersionGate] forceAppUpdate failed:', err)
-      // Fallback: reload simple
+    } catch {
       window.location.reload()
     }
   }
 
-  // Mientras comprueba (muy rápido, < 1s), no mostrar nada para no
-  // flashear. Si no hay conexión, el check devuelve null en < 100ms.
   if (checking) return null
 
   if (outdated) {
@@ -70,11 +65,10 @@ export function VersionGate({ children }: { children: ReactNode }) {
             Actualización necesaria
           </h1>
           <p className="mb-2 text-sm text-gray-600">
-            Estás usando una versión antigua de la app
-            (v{APP_VERSION}, se requiere v{minVersion}).
+            Hay una versión nueva de la app.
           </p>
           <p className="mb-6 text-sm text-gray-600">
-            Para evitar problemas con los datos compartidos del equipo,
+            Para evitar problemas con los datos del equipo,
             es necesario actualizar antes de continuar.
           </p>
           <button
@@ -85,8 +79,11 @@ export function VersionGate({ children }: { children: ReactNode }) {
             {updating ? 'Actualizando...' : 'ACTUALIZAR AHORA'}
           </button>
           <p className="mt-4 text-xs text-gray-400">
-            Esto limpiará la caché antigua y recargará la app.
-            No se pierden datos — todo está guardado en Supabase.
+            Esto limpiará la caché y recargará la app.
+            Tus datos están guardados en Supabase, no se pierde nada.
+          </p>
+          <p className="mt-2 text-[10px] text-gray-300">
+            Build: {APP_BUILD_TS}
           </p>
         </div>
       </div>

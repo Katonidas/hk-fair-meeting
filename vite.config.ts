@@ -48,6 +48,13 @@ export default defineConfig({
       },
     }),
   ],
+  define: {
+    // Timestamp inyectado en build time. Cada `npm run build` / `vercel --prod`
+    // genera un valor distinto. Se usa como versión automática: el primer
+    // dispositivo que carga el deploy nuevo actualiza Supabase, y los demás
+    // dispositivos con timestamp más viejo quedan bloqueados.
+    '__APP_BUILD_TS__': JSON.stringify(Date.now().toString()),
+  },
   resolve: {
     alias: {
       '@': '/src',
