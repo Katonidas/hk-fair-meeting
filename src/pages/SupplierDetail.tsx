@@ -306,11 +306,13 @@ export default function SupplierDetail({ currentUser }: Props) {
           }}
         />
 
-        {/* Productos Potenciales */}
-        {matchingSearchedProducts && matchingSearchedProducts.length > 0 && (
+        {/* Productos Potenciales — siempre visible para que el usuario pueda
+            añadir manualmente aunque no haya match automático */}
+        {id && (
           <PotentialProductsSection
-            products={matchingSearchedProducts}
+            products={matchingSearchedProducts || []}
             supplier={supplier}
+            supplierId={id}
           />
         )}
       </div>
@@ -571,11 +573,83 @@ function RenderTextWithLinks({ text }: { text: string }) {
   )
 }
 
-function PotentialProductsSection({ products, supplier }: { products: SearchedProduct[]; supplier: { name: string; emails: string[] } }) {
+export function PotentialProductsSection({ products, supplier, supplierId }: { products: SearchedProduct[]; supplier: { name: string; emails: string[] }; supplierId: string }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null)
   const [preparing, setPreparing] = useState(false)
   const [prepareMsg, setPrepareMsg] = useState('')
+  // Estado para orden de la tabla
+  const [sortCol, setSortCol] = useState<'brand' | 'product_type' | 'ref_segment' | 'main_specs' | 'pvpr' | 'target_cost'>('brand')
+  const [sortAsc, setSortAsc] = useState(true)
+  // Menú "3 puntos" abierto por fila
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
+  // Diálogo de añadir manual
+  const [showAddPicker, setShowAddPicker] = useState(false)
+  // Lista global de searched_products para el picker (productos que NO están ya
+  // en el match para añadir uno manualmente)
+  const allSearchedProducts = useLiveQuery(() => db.searched_products.toArray(), [])
+
+  function toggleSort(col: typeof sortCol) {
+    if (col === sortCol) setSortAsc(!sortAsc)
+    else { setSortCol(col); setSortAsc(true) }
+  }
+
+  // Ordena el listado según la columna seleccionada
+  const sorted = [...products].sort((a, b) => {
+    let cmp = 0
+    switch (sortCol) {
+      case 'brand': cmp = (a.brand || '').localeCompare(b.brand || ''); break
+      case 'product_type': cmp = (a.product_type || '').localeCompare(b.product_type || ''); break
+      case 'ref_segment': cmp = (a.ref_segment || '').localeCompare(b.ref_segment || ''); break
+      case 'main_specs': cmp = (a.main_specs || '').localeCompare(b.main_specs || ''); break
+      case 'pvpr': cmp = (a.pvpr ?? 0) - (b.pvpr ?? 0); break
+      case 'target_cost': cmp = (a.target_cost ?? 0) - (b.target_cost ?? 0); break
+    }
+    return sortAsc ? cmp : -cmp
+  })
+
+  const arrow = (col: typeof sortCol) => sortCol === col ? (sortAsc ? ' ↑' : ' ↓') : ''
+  const thBase = 'px-2 py-2 font-semibold text-purple-700 cursor-pointer whitespace-nowrap hover:text-purple-900 select-none'
+
+  // Eliminar producto del match de este proveedor. Si tenía supplierId en
+  // candidate_supplier_ids (link manual) lo quitamos. Para los matches
+  // automáticos por tipo, añadimos a una lista de "excluidos" del supplier.
+  // Por simplicidad implementamos solo el caso manual aquí: si el producto
+  // estaba enlazado manualmente lo desenlazamos. Si era un match automático
+  // por tipo, no se puede "deshacer" sin un campo nuevo de exclusiones, así
+  // que le advertimos al usuario.
+  async function handleRemoveFromList(sp: SearchedProduct) {
+    if (sp.candidate_supplier_ids?.includes(supplierId)) {
+      const next = sp.candidate_supplier_ids.filter(sid => sid !== supplierId)
+      await db.searched_products.update(sp.id, {
+        candidate_supplier_ids: next,
+        updated_at: new Date().toISOString(),
+      })
+      setOpenMenu(null)
+    } else {
+      window.alert(`"${sp.product_type}" aparece aquí porque su tipo de producto coincide automáticamente con el del proveedor. Para excluirlo, edita el tipo de producto en uno de los dos.`)
+    }
+  }
+
+  // Añadir manualmente un producto deseado al match de este proveedor
+  async function handleAddManual(sp: SearchedProduct) {
+    const current = sp.candidate_supplier_ids || []
+    if (current.includes(supplierId)) {
+      setShowAddPicker(false)
+      return
+    }
+    await db.searched_products.update(sp.id, {
+      candidate_supplier_ids: [...current, supplierId],
+      updated_at: new Date().toISOString(),
+    })
+    setShowAddPicker(false)
+  }
+
+  // IDs de productos ya en el match — para excluirlos del picker
+  const matchedIds = new Set(products.map(p => p.id))
+  const pickerCandidates = (allSearchedProducts || [])
+    .filter(p => !matchedIds.has(p.id))
+    .sort((a, b) => (a.brand || '').localeCompare(b.brand || '') || a.product_type.localeCompare(b.product_type))
 
   async function handlePrepareHTML() {
     if (!supplier) return
@@ -668,7 +742,13 @@ function PotentialProductsSection({ products, supplier }: { products: SearchedPr
         <h2 className="text-sm font-semibold text-purple-700">
           Productos Potenciales a encontrar en proveedor ({products.length})
         </h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setShowAddPicker(true)}
+            className="rounded-lg border border-purple-300 bg-white px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-50"
+          >
+            + Añadir manual
+          </button>
           <button
             onClick={handlePrepareHTML}
             disabled={preparing}
@@ -689,67 +769,143 @@ function PotentialProductsSection({ products, supplier }: { products: SearchedPr
           {prepareMsg}
         </div>
       )}
-      <div className="flex flex-col gap-2">
-        {products.map(sp => (
-          <div key={sp.id}>
-            <button
-              onClick={() => setExpanded(expanded === sp.id ? null : sp.id)}
-              className="w-full rounded-lg border border-purple-200 bg-purple-50 p-3 text-left hover:bg-purple-100 transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-purple-800">
-                  {sp.brand || '—'} — {sp.product_type} — {sp.ref_segment || '—'}
-                </span>
-                {sp.target_cost != null && (
-                  <span className="text-xs font-bold text-purple-600">{fmtPrice(sp.target_cost)}</span>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-gray-600 truncate">{sp.main_specs || 'Sin specs'}</p>
-            </button>
-            {expanded === sp.id && (
-              <div className="mt-1 rounded-lg border border-purple-300 bg-white p-4 space-y-2">
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div><span className="font-semibold text-gray-500">Marca:</span> <span className="text-gray-800">{sp.brand || '—'}</span></div>
-                  <div><span className="font-semibold text-gray-500">Tipo:</span> <span className="text-gray-800">{sp.product_type}</span></div>
-                  <div><span className="font-semibold text-gray-500">Ref/Segmento:</span> <span className="text-gray-800">{sp.ref_segment || '—'}</span></div>
-                  <div><span className="font-semibold text-gray-500">Modelo:</span> <span className="text-gray-800">{sp.model_interno || '—'}</span></div>
-                  <div><span className="font-semibold text-gray-500">Target Cost:</span> <span className="font-bold text-green-700">{fmtPrice(sp.target_cost)}</span></div>
-                  <div><span className="font-semibold text-gray-500">PVPR:</span> <span className="text-gray-800">{fmtPrice(sp.pvpr, 'EUR')}</span></div>
-                  <div><span className="font-semibold text-gray-500">Margen:</span> <span className="text-gray-800">{sp.margin_target || '—'}</span></div>
-                </div>
-                {sp.main_specs && (
-                  <div className="text-xs">
-                    <span className="font-semibold text-gray-500">Specs:</span>
-                    <p className="mt-0.5 whitespace-pre-wrap text-gray-700">{sp.main_specs}</p>
-                  </div>
-                )}
-                {sp.examples && (
-                  <div className="text-xs">
-                    <span className="font-semibold text-gray-500">Examples:</span>
-                    <p className="mt-0.5 whitespace-pre-wrap text-gray-700"><RenderTextWithLinks text={sp.examples} /></p>
-                  </div>
-                )}
-                {sp.photos && sp.photos.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 mb-1">Fotos:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {sp.photos.map((url, i) => (
-                        <img
-                          key={i}
-                          src={url}
-                          alt={`Foto ${i + 1}`}
-                          className="h-16 w-16 cursor-pointer rounded-lg object-cover border border-gray-200 hover:opacity-80"
-                          onClick={() => setEnlargedPhoto(url)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
+
+      {products.length === 0 ? (
+        <p className="py-4 text-center text-sm text-gray-400">Sin productos potenciales para este proveedor.</p>
+      ) : (
+        <div className="-mx-4 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-xs">
+            <thead>
+              <tr className="border-b border-purple-200 bg-purple-50">
+                <th className={`${thBase} text-left`} onClick={() => toggleSort('brand')}>Marca{arrow('brand')}</th>
+                <th className={`${thBase} text-left`} onClick={() => toggleSort('product_type')}>Tipo{arrow('product_type')}</th>
+                <th className={`${thBase} text-left`} onClick={() => toggleSort('ref_segment')}>Referencia{arrow('ref_segment')}</th>
+                <th className={`${thBase} text-left`} onClick={() => toggleSort('main_specs')}>Specs{arrow('main_specs')}</th>
+                <th className={`${thBase} text-right`} onClick={() => toggleSort('pvpr')}>PVPR €{arrow('pvpr')}</th>
+                <th className={`${thBase} text-right`} onClick={() => toggleSort('target_cost')}>Target $ {arrow('target_cost')}</th>
+                <th className="px-2 py-2 w-8"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(sp => (
+                <>
+                  <tr
+                    key={sp.id}
+                    onClick={() => setExpanded(expanded === sp.id ? null : sp.id)}
+                    className="cursor-pointer border-b border-gray-100 bg-white hover:bg-purple-50"
+                  >
+                    <td className="px-2 py-2 font-medium text-gray-800">{sp.brand || '—'}</td>
+                    <td className="px-2 py-2 text-gray-600">{sp.product_type || '—'}</td>
+                    <td className="px-2 py-2 text-gray-600 max-w-[120px] truncate">{sp.ref_segment || '—'}</td>
+                    <td className="px-2 py-2 text-gray-500 max-w-[180px] truncate">{sp.main_specs || '—'}</td>
+                    <td className="px-2 py-2 text-right text-gray-700">{fmtPrice(sp.pvpr, 'EUR')}</td>
+                    <td className="px-2 py-2 text-right font-bold text-green-700">{fmtPrice(sp.target_cost)}</td>
+                    <td className="px-2 py-2 text-center relative" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => setOpenMenu(openMenu === sp.id ? null : sp.id)}
+                        className="rounded p-1 text-gray-500 hover:bg-gray-100"
+                        aria-label="Más acciones"
+                      >
+                        ⋮
+                      </button>
+                      {openMenu === sp.id && (
+                        <div className="absolute right-2 top-9 z-30 min-w-[160px] rounded-lg border border-gray-200 bg-white py-1 text-left shadow-lg">
+                          <button
+                            onClick={() => { setExpanded(sp.id); setOpenMenu(null) }}
+                            className="block w-full px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
+                          >
+                            Ver detalle
+                          </button>
+                          <button
+                            onClick={() => handleRemoveFromList(sp)}
+                            className="block w-full px-3 py-2 text-xs text-red-600 hover:bg-red-50"
+                          >
+                            Eliminar de la lista
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                  {expanded === sp.id && (
+                    <tr key={`${sp.id}-detail`} className="bg-purple-50/30">
+                      <td colSpan={7} className="px-3 py-3">
+                        <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-3">
+                          <div><span className="font-semibold text-gray-500">Marca:</span> <span className="text-gray-800">{sp.brand || '—'}</span></div>
+                          <div><span className="font-semibold text-gray-500">Tipo:</span> <span className="text-gray-800">{sp.product_type}</span></div>
+                          <div><span className="font-semibold text-gray-500">Ref:</span> <span className="text-gray-800">{sp.ref_segment || '—'}</span></div>
+                          <div><span className="font-semibold text-gray-500">Modelo:</span> <span className="text-gray-800">{sp.model_interno || '—'}</span></div>
+                          <div><span className="font-semibold text-gray-500">Target:</span> <span className="font-bold text-green-700">{fmtPrice(sp.target_cost)}</span></div>
+                          <div><span className="font-semibold text-gray-500">PVPR:</span> <span className="text-gray-800">{fmtPrice(sp.pvpr, 'EUR')}</span></div>
+                          <div><span className="font-semibold text-gray-500">Margen:</span> <span className="text-gray-800">{sp.margin_target ? `${sp.margin_target}%` : '—'}</span></div>
+                          <div><span className="font-semibold text-gray-500">Prioridad:</span> <span className="text-gray-800">{sp.relevance === 1 ? 'IMPRESCINDIBLE' : sp.relevance === 3 ? 'OPCIONAL' : 'IMPORTANTE'}</span></div>
+                        </div>
+                        {sp.main_specs && (
+                          <div className="mt-2 text-xs">
+                            <span className="font-semibold text-gray-500">Specs:</span>
+                            <p className="mt-0.5 whitespace-pre-wrap text-gray-700">{sp.main_specs}</p>
+                          </div>
+                        )}
+                        {sp.examples && (
+                          <div className="mt-2 text-xs">
+                            <span className="font-semibold text-gray-500">Ejemplos:</span>
+                            <p className="mt-0.5 whitespace-pre-wrap text-gray-700"><RenderTextWithLinks text={sp.examples} /></p>
+                          </div>
+                        )}
+                        {sp.photos && sp.photos.length > 0 && (
+                          <div className="mt-2">
+                            <p className="mb-1 text-xs font-semibold text-gray-500">Fotos:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {sp.photos.map((url, i) => (
+                                <img
+                                  key={i}
+                                  src={url}
+                                  alt={`Foto ${i + 1}`}
+                                  className="h-16 w-16 cursor-pointer rounded-lg object-cover border border-gray-200 hover:opacity-80"
+                                  onClick={() => setEnlargedPhoto(url)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Picker para añadir manualmente */}
+      {showAddPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowAddPicker(false)}>
+          <div className="w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-2xl bg-white p-5" onClick={e => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-bold text-gray-800">Añadir producto deseado</h3>
+              <button onClick={() => setShowAddPicker(false)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">✕</button>
+            </div>
+            <p className="mb-3 text-xs text-gray-500">Selecciona un producto buscado para vincularlo a este proveedor:</p>
+            {pickerCandidates.length === 0 ? (
+              <p className="py-6 text-center text-sm text-gray-400">No hay productos buscados disponibles.</p>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {pickerCandidates.map(sp => (
+                  <button
+                    key={sp.id}
+                    onClick={() => handleAddManual(sp)}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-left text-xs hover:bg-purple-50 hover:border-purple-300"
+                  >
+                    <span className="font-bold text-gray-800">{sp.brand || '—'}</span>
+                    <span className="text-gray-500"> · {sp.product_type} · {sp.ref_segment || '—'}</span>
+                    <p className="mt-0.5 text-gray-500 truncate">{sp.main_specs || 'Sin specs'}</p>
+                  </button>
+                ))}
               </div>
             )}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
       {enlargedPhoto && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80" onClick={() => setEnlargedPhoto(null)}>

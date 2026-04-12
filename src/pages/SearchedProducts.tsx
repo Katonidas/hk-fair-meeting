@@ -22,6 +22,22 @@ function formatMarginDisplay(margin: string): string {
   return `${Math.round(val)}%`
 }
 
+/**
+ * Normaliza el valor de margen del Excel a un entero (string) representando
+ * el porcentaje. Excel guarda celdas con formato porcentaje como decimal
+ * (60% → 0.6). Esta función detecta y normaliza para que TODO el sistema
+ * trabaje con el entero (60), evitando que el input numérico de la tabla
+ * muestre "0,6" en lugar de "60".
+ */
+function normalizeMarginToWholePercent(raw: string): string {
+  if (!raw) return ''
+  const trimmed = raw.replace('%', '').replace(',', '.').trim()
+  const val = parseFloat(trimmed)
+  if (isNaN(val)) return raw
+  if (val > 0 && val < 1) return Math.round(val * 100).toString()
+  return Math.round(val).toString()
+}
+
 function calcTargetCost(brand: string, pvpr: number | null, marginTarget: string): number | null {
   if (!pvpr || !marginTarget) return null
   const margin = parseFloat(marginTarget.replace('%', '').replace(',', '.').trim())
@@ -107,14 +123,37 @@ export default function SearchedProducts() {
         const mainSpecs = get('mainspecs', 'specs', 'especificaciones', 'specifications')
         const targetCost = get('targetcost', 'coste', 'cost', 'targetcompra')
         const examples = get('examples', 'ejemplo', 'links', 'fotos')
-        const marginTarget = get('margintarget', 'margin', 'margen')
+        const marginTargetRaw = get('margintarget', 'margin', 'margen')
         const pvpr = get('pvpr', 'pvp', 'pvprtarget', 'precioventa', 'precio')
         const modelInterno = get('modelinterno', 'modelo', 'model', 'nombre')
+        // Última columna del Excel = prioridad (también buscamos por nombre)
+        const priorityRaw = get('prioridad', 'priority', 'relevance', 'relevancia')
+
+        // FIX bug porcentaje: Excel guarda celdas formateadas como porcentaje
+        // (ej. "60%") como número decimal (0.6). Si lo importamos sin
+        // normalizar queda como "0.6" en el campo y al mostrar el input
+        // numérico se ve "0.6" en lugar de "60". Normalizamos a entero
+        // multiplicando por 100 cuando el valor está en formato decimal.
+        const marginTarget = normalizeMarginToWholePercent(marginTargetRaw)
 
         // Skip completely empty rows, but allow rows with at least one field
         if (!brand && !productType && !refSegment && !mainSpecs && !modelInterno) {
           skipped++
           continue
+        }
+
+        // Resolver prioridad: si no la encontramos por nombre, usar la
+        // ÚLTIMA columna del Excel como fallback (petición del usuario).
+        let priorityNum: number = 2
+        let priorityStr = priorityRaw
+        if (!priorityStr) {
+          const lastCol = cols[cols.length - 1]
+          const v = row[lastCol]
+          if (v !== undefined && v !== null && v !== '') priorityStr = String(v).trim()
+        }
+        if (priorityStr) {
+          const parsed = parseInt(priorityStr.replace(/[^0-9]/g, ''), 10)
+          if ([1, 2, 3].includes(parsed)) priorityNum = parsed
         }
 
         await db.searched_products.add({
@@ -128,6 +167,7 @@ export default function SearchedProducts() {
           margin_target: marginTarget,
           pvpr: pvpr ? parseFloat(pvpr.replace(/[^0-9.,]/g, '').replace(',', '.')) || null : null,
           model_interno: modelInterno,
+          relevance: (priorityNum as 1 | 2 | 3),
           candidate_product_ids: [],
           candidate_supplier_ids: [],
           photos: [],
@@ -389,6 +429,7 @@ function SearchedProductForm({
       await db.searched_products.add({
         id: uuid(),
         ...data,
+        relevance: 2,
         candidate_product_ids: [],
         candidate_supplier_ids: [],
         photos: [],

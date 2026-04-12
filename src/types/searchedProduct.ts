@@ -9,6 +9,8 @@ export interface SearchedProduct {
   margin_target: string
   pvpr: number | null
   model_interno: string
+  /** Importancia: 1=Imprescindible, 2=Importante, 3=Opcional */
+  relevance: 1 | 2 | 3
   candidate_product_ids: string[]
   candidate_supplier_ids: string[]
   photos: string[]

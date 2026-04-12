@@ -1,6 +1,7 @@
 import { db } from './db'
 import { supabase, isSupabaseConfigured } from './supabase'
 import type { Supplier, Meeting, Product } from '@/types'
+import type { SearchedProduct } from '@/types/searchedProduct'
 
 export type SyncStatus = 'synced' | 'pending' | 'error' | 'offline'
 
@@ -12,7 +13,7 @@ const listeners = new Set<(status: SyncStatus) => void>()
 // Persisted to localStorage to survive page refreshes
 const TOMBSTONE_KEY = 'hk-fair-tombstones'
 
-function loadTombstones(): { meetings: string[]; products: string[]; suppliers: string[] } {
+function loadTombstones(): { meetings: string[]; products: string[]; suppliers: string[]; searched_products: string[] } {
   try {
     const raw = localStorage.getItem(TOMBSTONE_KEY)
     if (raw) {
@@ -21,10 +22,11 @@ function loadTombstones(): { meetings: string[]; products: string[]; suppliers: 
         meetings: parsed.meetings || [],
         products: parsed.products || [],
         suppliers: parsed.suppliers || [],
+        searched_products: parsed.searched_products || [],
       }
     }
   } catch { /* ignore */ }
-  return { meetings: [], products: [], suppliers: [] }
+  return { meetings: [], products: [], suppliers: [], searched_products: [] }
 }
 
 function saveTombstones() {
@@ -32,6 +34,7 @@ function saveTombstones() {
     meetings: [...deletedMeetingIds],
     products: [...deletedProductIds],
     suppliers: [...deletedSupplierIds],
+    searched_products: [...deletedSearchedProductIds],
   }))
 }
 
@@ -39,6 +42,7 @@ const saved = loadTombstones()
 const deletedMeetingIds = new Set<string>(saved.meetings)
 const deletedProductIds = new Set<string>(saved.products)
 const deletedSupplierIds = new Set<string>(saved.suppliers)
+const deletedSearchedProductIds = new Set<string>(saved.searched_products)
 
 export function onSyncStatusChange(fn: (status: SyncStatus) => void) {
   listeners.add(fn)
@@ -69,10 +73,12 @@ export async function syncAll(): Promise<void> {
     await pushMeetings()
     await pushProducts()
     await pushProductPhotos()
+    await pushSearchedProducts()
     await pullSuppliers()
     await pullMeetings()
     await pullProducts()
     await pullProductPhotos()
+    await pullSearchedProducts()
     setStatus('synced')
   } catch (err) {
     console.error('Sync error:', err)
@@ -184,6 +190,41 @@ export async function deleteMeeting(meetingId: string): Promise<void> {
       await supabase.from('meetings').delete().eq('id', meetingId)
     } catch (err) {
       console.error('Error deleting from Supabase:', err)
+    }
+  }
+}
+
+export async function deleteSearchedProduct(id: string): Promise<void> {
+  // Track as deleted so pull won't restore
+  deletedSearchedProductIds.add(id)
+  saveTombstones()
+
+  // Delete locally
+  await db.searched_products.delete(id)
+
+  // Delete from Supabase if configured and online
+  if (isSupabaseConfigured() && navigator.onLine) {
+    try {
+      await supabase.from('searched_products').delete().eq('id', id)
+    } catch (err) {
+      console.error('Error deleting searched_product from Supabase:', err)
+    }
+  }
+}
+
+export async function deleteAllSearchedProducts(): Promise<void> {
+  const all = await db.searched_products.toArray()
+  for (const p of all) deletedSearchedProductIds.add(p.id)
+  saveTombstones()
+  await db.searched_products.clear()
+
+  if (isSupabaseConfigured() && navigator.onLine) {
+    try {
+      for (const p of all) {
+        await supabase.from('searched_products').delete().eq('id', p.id)
+      }
+    } catch (err) {
+      console.error('Error deleting all searched_products from Supabase:', err)
     }
   }
 }
@@ -397,6 +438,100 @@ async function pullProductPhotos() {
         created_at: remote.created_at,
       })
     }
+  }
+}
+
+// ── Searched products (productos deseados) ──
+
+async function pushSearchedProducts() {
+  const unsynced = await db.searched_products
+    .filter(p => !p.synced_at || p.updated_at > p.synced_at)
+    .toArray()
+
+  for (const p of unsynced) {
+    const row = toSupabaseSearchedProduct(p)
+    const { error } = await supabase.from('searched_products').upsert(row, { onConflict: 'id' })
+    if (!error) {
+      await db.searched_products.update(p.id, { synced_at: new Date().toISOString() })
+    } else {
+      console.error('Push searched_product error:', p.id, error)
+    }
+  }
+}
+
+async function pullSearchedProducts() {
+  const { data, error } = await supabase
+    .from('searched_products')
+    .select('*')
+
+  if (error || !data) {
+    if (error) console.error('Pull searched_products error:', error)
+    return
+  }
+
+  const remoteIds = new Set<string>(data.map((r: Record<string, unknown>) => r.id as string))
+
+  for (const remote of data) {
+    // Skip ones deleted locally (tombstone)
+    if (deletedSearchedProductIds.has(remote.id as string)) continue
+
+    const local = await db.searched_products.get(remote.id as string)
+    if (!local || (remote.updated_at && (remote.updated_at as string) > local.updated_at)) {
+      await db.searched_products.put(fromSupabaseSearchedProduct(remote))
+    }
+  }
+
+  // Detect deletions: local rows that were once synced but are missing remotely
+  const localAll = await db.searched_products.toArray()
+  for (const local of localAll) {
+    if (local.synced_at && !remoteIds.has(local.id)) {
+      await db.searched_products.delete(local.id)
+    }
+  }
+}
+
+function toSupabaseSearchedProduct(p: SearchedProduct): Record<string, unknown> {
+  return {
+    id: p.id,
+    brand: p.brand,
+    product_type: p.product_type,
+    ref_segment: p.ref_segment,
+    main_specs: p.main_specs,
+    target_cost: p.target_cost,
+    examples: p.examples,
+    margin_target: p.margin_target,
+    pvpr: p.pvpr,
+    model_interno: p.model_interno,
+    relevance: p.relevance,
+    candidate_product_ids: p.candidate_product_ids,
+    candidate_supplier_ids: p.candidate_supplier_ids,
+    photos: p.photos,
+    created_at: p.created_at,
+    updated_at: p.updated_at,
+  }
+}
+
+function fromSupabaseSearchedProduct(r: Record<string, unknown>): SearchedProduct {
+  const rawRelevance = r.relevance as number | undefined
+  const relevance: 1 | 2 | 3 = (rawRelevance === 1 || rawRelevance === 3) ? rawRelevance : 2
+  return {
+    id: r.id as string,
+    brand: (r.brand as string) || '',
+    product_type: (r.product_type as string) || '',
+    ref_segment: (r.ref_segment as string) || '',
+    main_specs: (r.main_specs as string) || '',
+    target_cost: (r.target_cost as number) ?? null,
+    examples: (r.examples as string) || '',
+    margin_target: (r.margin_target as string) || '',
+    pvpr: (r.pvpr as number) ?? null,
+    model_interno: (r.model_interno as string) || '',
+    relevance,
+    candidate_product_ids: (r.candidate_product_ids as string[]) || [],
+    candidate_supplier_ids: (r.candidate_supplier_ids as string[]) || [],
+    photos: (r.photos as string[]) || [],
+    created_at: (r.created_at as string) || new Date().toISOString(),
+    updated_at: (r.updated_at as string) || new Date().toISOString(),
+    synced_at: new Date().toISOString(),
   }
 }
 

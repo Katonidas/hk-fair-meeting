@@ -28,6 +28,13 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // skipWaiting + clientsClaim → el SW nuevo toma control inmediato
+        // sin esperar a cerrar todas las pestañas. Imprescindible en una
+        // PWA instalada en el móvil porque si no, los usuarios pueden
+        // quedarse bloqueados en una versión antigua para siempre.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/glutewwayemuftmjvbcs\.supabase\.co\/.*/i,

@@ -4,37 +4,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
 import { normalize } from '@/lib/normalize'
-import { fmtPrice } from '@/lib/price'
 import { getMatchingSearchedProducts } from '@/lib/matching'
+import { PotentialProductsSection } from '@/pages/SupplierDetail'
 import type { UserName, Supplier, MeetingLocation } from '@/types'
 import type { SearchedProduct } from '@/types/searchedProduct'
-
-function calcTargetCost(brand: string, pvpr: number | null, marginTarget: string): number | null {
-  if (!pvpr || !marginTarget) return null
-  const margin = parseFloat(marginTarget.replace('%', '').replace(',', '.').trim())
-  if (isNaN(margin)) return null
-  const m = margin > 1 ? margin / 100 : margin
-  const brandUpper = brand.toUpperCase().trim()
-  if (brandUpper === 'TICNOVA') return Math.round(((pvpr / 1.21) * (1 - m)) / 1.12 * 100) / 100
-  return Math.round(((pvpr / 1.21) * (1 - m)) / 1.2 * 100) / 100
-}
-
-function RenderLinks({ text }: { text: string }) {
-  if (!text) return <span>—</span>
-  const urlRegex = /(https?:\/\/[^\s]+)/g
-  const parts = text.split(urlRegex)
-  return (
-    <>
-      {parts.map((part, i) =>
-        urlRegex.test(part) ? (
-          <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all">{part}</a>
-        ) : (
-          <span key={i}>{part}</span>
-        )
-      )}
-    </>
-  )
-}
 
 function getLocalDatetime() {
   const d = new Date()
@@ -87,7 +60,6 @@ export default function NewMeeting({ currentUser }: Props) {
   }
 
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
-  const [expandedProduct, setExpandedProduct] = useState<SearchedProduct | null>(null)
 
   const suggestedProducts = useLiveQuery(async () => {
     if (!selectedSupplier) return [] as SearchedProduct[]
@@ -191,87 +163,14 @@ export default function NewMeeting({ currentUser }: Props) {
                 INICIAR REUNIÓN
               </button>
 
-              {/* Suggested products */}
-              {suggestedProducts && suggestedProducts.length > 0 && (
-                <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
-                  <h3 className="mb-2 text-xs font-semibold text-purple-700">
-                    Productos potenciales que podrías encontrar en este proveedor ({suggestedProducts.length})
-                  </h3>
-                  <div className="flex flex-col gap-2">
-                    {suggestedProducts.map(sp => {
-                      const tc = calcTargetCost(sp.brand, sp.pvpr, sp.margin_target)
-                      return (
-                        <button
-                          key={sp.id}
-                          onClick={() => setExpandedProduct(expandedProduct?.id === sp.id ? null : sp)}
-                          className="rounded-lg bg-white p-3 text-xs text-left hover:bg-purple-50 transition-colors"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-gray-800">
-                              {sp.brand}{sp.brand && ' — '}{sp.product_type}{sp.ref_segment && ` — ${sp.ref_segment}`}
-                            </span>
-                            <span className="text-purple-600 font-bold shrink-0 ml-2">{fmtPrice(tc)}</span>
-                          </div>
-                          <p className="mt-1 text-gray-500 truncate">
-                            {sp.main_specs ? sp.main_specs.substring(0, 80) + (sp.main_specs.length > 80 ? '...' : '') : 'Sin specs'}
-                          </p>
-
-                          {/* Expanded detail */}
-                          {expandedProduct?.id === sp.id && (
-                            <div className="mt-3 border-t border-purple-100 pt-3 space-y-2" onClick={e => e.stopPropagation()}>
-                              {sp.main_specs && (
-                                <div>
-                                  <p className="text-[10px] font-medium text-gray-400">Specs</p>
-                                  <p className="text-xs text-gray-700 whitespace-pre-wrap">{sp.main_specs}</p>
-                                </div>
-                              )}
-                              <div className="flex gap-4">
-                                {sp.pvpr != null && (
-                                  <div>
-                                    <p className="text-[10px] font-medium text-gray-400">PVPR</p>
-                                    <p className="text-xs text-gray-700">{fmtPrice(sp.pvpr, 'EUR')}</p>
-                                  </div>
-                                )}
-                                <div>
-                                  <p className="text-[10px] font-medium text-gray-400">Target Cost</p>
-                                  <p className="text-xs font-bold text-green-700">{fmtPrice(tc)}</p>
-                                </div>
-                                {sp.margin_target && (
-                                  <div>
-                                    <p className="text-[10px] font-medium text-gray-400">Margen</p>
-                                    <p className="text-xs text-gray-700">{sp.margin_target}%</p>
-                                  </div>
-                                )}
-                              </div>
-                              {sp.model_interno && (
-                                <div>
-                                  <p className="text-[10px] font-medium text-gray-400">Modelo interno</p>
-                                  <p className="text-xs text-gray-700">{sp.model_interno}</p>
-                                </div>
-                              )}
-                              {sp.examples && (
-                                <div>
-                                  <p className="text-[10px] font-medium text-gray-400">Examples / Referencias</p>
-                                  <p className="text-xs text-gray-600 whitespace-pre-wrap">
-                                    <RenderLinks text={sp.examples} />
-                                  </p>
-                                </div>
-                              )}
-                              {sp.photos && sp.photos.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mt-1">
-                                  {sp.photos.map((url, i) => (
-                                    <img key={i} src={url} alt={`Foto ${i + 1}`} className="h-16 w-16 rounded object-cover border border-gray-200" />
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
+              {/* Productos potenciales — mismo componente que SupplierDetail
+                  para mantener UX consistente: tabla ordenable + 3 puntos
+                  para añadir/quitar manualmente. */}
+              <PotentialProductsSection
+                products={suggestedProducts || []}
+                supplier={selectedSupplier}
+                supplierId={selectedSupplier.id}
+              />
             </div>
           ) : (
             <div className="flex flex-col gap-2">

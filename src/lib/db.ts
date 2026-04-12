@@ -53,6 +53,20 @@ export class FairDB extends Dexie {
         if (!sp.photos) sp.photos = []
       })
     })
+    // v11: añade relevance (default 2) y normaliza margin_target a entero
+    // (el bug del importador guardaba 0.6 en lugar de 60).
+    this.version(11).stores({}).upgrade(tx => {
+      return tx.table('searched_products').toCollection().modify(sp => {
+        if (sp.relevance == null) sp.relevance = 2
+        if (typeof sp.margin_target === 'string' && sp.margin_target) {
+          const trimmed = sp.margin_target.replace('%', '').replace(',', '.').trim()
+          const val = parseFloat(trimmed)
+          if (!isNaN(val) && val > 0 && val < 1) {
+            sp.margin_target = Math.round(val * 100).toString()
+          }
+        }
+      })
+    })
   }
 }
 
