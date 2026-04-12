@@ -51,12 +51,17 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
     return getMatchingSearchedProducts(meeting.supplier_id)
   }, [meeting?.supplier_id])
 
+  // Cargar notas solo al montar o al cambiar de meeting (id distinto).
+  // NO recargar si Dexie re-emite el mismo meeting (ej. tras autoSave)
+  // porque eso machaca lo que el usuario está tecleando.
+  const [notesInitialized, setNotesInitialized] = useState(false)
   useEffect(() => {
-    if (meeting) {
+    if (meeting && !notesInitialized) {
       setUrgentNotes(meeting.urgent_notes)
       setOtherNotes(meeting.other_notes)
+      setNotesInitialized(true)
     }
-  }, [meeting])
+  }, [meeting, notesInitialized])
 
   useEffect(() => {
     if (supplier && !contactsInitialized) {
@@ -309,7 +314,7 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
         {isEditable ? (
           <div className="flex gap-3">
             <button
-              onClick={() => navigate(backPath)}
+              onClick={async () => { await autoSave(); navigate(backPath) }}
               className="rounded-xl border border-gray-300 bg-gray-50 px-4 py-4 text-base font-medium text-gray-500 transition-colors hover:bg-gray-100"
             >
               ← Volver

@@ -37,6 +37,13 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
+            // app_config NUNCA se cachea — es la fuente de verdad para el
+            // version gate. Si se cacheara, un SW viejo serviría la versión
+            // mínima antigua y el usuario nunca vería la pantalla de bloqueo.
+            urlPattern: /^https:\/\/glutewwayemuftmjvbcs\.supabase\.co\/rest\/v1\/app_config.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: /^https:\/\/glutewwayemuftmjvbcs\.supabase\.co\/.*/i,
             handler: 'NetworkFirst',
             options: {

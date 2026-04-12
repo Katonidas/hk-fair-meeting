@@ -24,8 +24,20 @@ export const APP_BUILD_TS = __APP_BUILD_TS__
  * Obtiene la versión mínima requerida de Supabase.
  * Devuelve null si no hay conexión, no hay tabla, o no hay fila.
  */
+const MIN_VERSION_CACHE_KEY = 'hk-fair-min-app-version'
+
 export async function getMinAppVersion(): Promise<string | null> {
-  if (!isSupabaseConfigured() || !navigator.onLine) return null
+  if (!isSupabaseConfigured()) {
+    // Sin config → usar cache local si existe
+    return localStorage.getItem(MIN_VERSION_CACHE_KEY)
+  }
+
+  if (!navigator.onLine) {
+    // Offline → usar la última versión mínima conocida del cache local.
+    // Sin esto, usuarios offline nunca se bloquean y pueden corromper datos
+    // al volver online con una versión vieja.
+    return localStorage.getItem(MIN_VERSION_CACHE_KEY)
+  }
 
   try {
     const { data, error } = await supabase
@@ -34,10 +46,18 @@ export async function getMinAppVersion(): Promise<string | null> {
       .eq('key', 'min_app_version')
       .single()
 
-    if (error || !data) return null
+    if (error || !data) {
+      // Supabase falló → usar cache local como fallback
+      return localStorage.getItem(MIN_VERSION_CACHE_KEY)
+    }
+
+    // Guardar en localStorage para consultas offline futuras
+    if (data.value) {
+      localStorage.setItem(MIN_VERSION_CACHE_KEY, data.value)
+    }
     return data.value || null
   } catch {
-    return null
+    return localStorage.getItem(MIN_VERSION_CACHE_KEY)
   }
 }
 

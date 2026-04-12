@@ -56,15 +56,12 @@ export default function MeetingEmail({ currentUser }: Props) {
 
   const ccEmails = getCCEmails(currentUser)
 
-  function handleOpenEmail() {
+  async function handleOpenEmail() {
     const toList = toEmails.split(',').map(e => e.trim()).filter(Boolean)
     const url = buildMailtoUrl(toList, ccEmails, subject, body)
 
-    window.open(url, '_self')
-
-    // Mark email as generated + backup
+    // Persistir ANTES de window.open — si navega fuera, las promesas se abortan
     if (id && meeting && supplier) {
-      // Backup definitivo (texto plano) en Supabase Storage
       void saveEmailBackup({
         supplierName: supplier.name,
         to: toEmails,
@@ -75,17 +72,19 @@ export default function MeetingEmail({ currentUser }: Props) {
         user: currentUser,
       })
       const now = new Date().toISOString()
-      db.meetings.update(id, {
+      await db.meetings.update(id, {
         email_generated: true,
         email_sent_at: now,
         updated_at: now,
       })
-      db.suppliers.update(meeting.supplier_id, {
+      await db.suppliers.update(meeting.supplier_id, {
         visited: true,
         updated_at: now,
         updated_by: currentUser,
       })
     }
+
+    window.open(url, '_self')
   }
 
   async function handlePrepareEmail() {
@@ -122,16 +121,16 @@ export default function MeetingEmail({ currentUser }: Props) {
       const ccList = getCCEmails(currentUser)
       const url = buildMailtoUrl(toList, ccList, subject, '')
 
+      // Persistir ANTES de window.open
+      if (id && meeting) {
+        const now = new Date().toISOString()
+        await db.meetings.update(id, { email_generated: true, email_sent_at: now, updated_at: now })
+        await db.suppliers.update(meeting.supplier_id, { visited: true, updated_at: now, updated_by: currentUser })
+      }
+
       setTimeout(() => {
         window.open(url, '_self')
       }, 300)
-
-      // Mark as generated
-      if (id && meeting) {
-        const now = new Date().toISOString()
-        db.meetings.update(id, { email_generated: true, email_sent_at: now, updated_at: now })
-        db.suppliers.update(meeting.supplier_id, { visited: true, updated_at: now, updated_by: currentUser })
-      }
 
       setTimeout(() => setPrepareMsg(''), 8000)
     } finally {
@@ -143,15 +142,23 @@ export default function MeetingEmail({ currentUser }: Props) {
     setTranslating(true)
     setTranslateError('')
     setTranslateSuccess(false)
+    // Guardar originales para rollback si falla a medias
+    const origBody = body
+    const origSubject = subject
     try {
-      const translated = await translateAndCorrect(body)
-      setBody(translated)
-      // Also translate subject if it has Spanish
-      const translatedSubject = await translateAndCorrect(subject)
+      // Traducir ambos en paralelo — si uno falla, rollback atómico
+      const [translatedBody, translatedSubject] = await Promise.all([
+        translateAndCorrect(body),
+        translateAndCorrect(subject),
+      ])
+      setBody(translatedBody)
       setSubject(translatedSubject)
       setTranslateSuccess(true)
       setTimeout(() => setTranslateSuccess(false), 3000)
     } catch (err) {
+      // Rollback — restaurar originales para no dejar email mezclado
+      setBody(origBody)
+      setSubject(origSubject)
       if (err instanceof Error && err.message === 'NO_CONNECTION') {
         setTranslateError('Sin conexión a Internet. No se puede traducir/corregir.')
       } else {

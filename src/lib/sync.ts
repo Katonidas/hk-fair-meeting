@@ -550,8 +550,8 @@ function toSupabaseSearchedProduct(p: SearchedProduct): Record<string, unknown> 
 }
 
 function fromSupabaseSearchedProduct(r: Record<string, unknown>): SearchedProduct {
-  const rawRelevance = r.relevance as number | undefined
-  const relevance: 1 | 2 | 3 = (rawRelevance === 1 || rawRelevance === 3) ? rawRelevance : 2
+  const parsedRelevance = Number(r.relevance)
+  const relevance: 1 | 2 | 3 = ([1, 2, 3].includes(parsedRelevance) ? parsedRelevance : 2) as 1 | 2 | 3
   return {
     id: r.id as string,
     brand: (r.brand as string) || '',

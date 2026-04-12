@@ -60,6 +60,7 @@ export default function NewMeeting({ currentUser }: Props) {
   }
 
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
+  const [creatingMeeting, setCreatingMeeting] = useState(false)
 
   const suggestedProducts = useLiveQuery(async () => {
     if (!selectedSupplier) return [] as SearchedProduct[]
@@ -67,7 +68,13 @@ export default function NewMeeting({ currentUser }: Props) {
   }, [selectedSupplier?.id])
 
   async function handleConfirmSupplier() {
-    if (selectedSupplier) await createMeetingForSupplier(selectedSupplier.id)
+    if (!selectedSupplier || creatingMeeting) return
+    setCreatingMeeting(true)
+    try {
+      await createMeetingForSupplier(selectedSupplier.id)
+    } finally {
+      setCreatingMeeting(false)
+    }
   }
 
   return (
