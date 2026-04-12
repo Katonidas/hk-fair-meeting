@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
-import { backupBeforeDelete } from '@/lib/backup'
+import { deleteSearchedProduct, deleteAllSearchedProducts } from '@/lib/sync'
 import { normalize } from '@/lib/normalize'
 import { getFormulaGame, getFormulaTicnova } from '@/lib/settings'
 import { fmtPrice } from '@/lib/price'
@@ -252,9 +252,7 @@ export default function SearchedProducts() {
 
   async function handleDelete(id: string) {
     if (!window.confirm('¿Eliminar este producto buscado? Se guardará en la papelera.')) return
-    const p = await db.searched_products.get(id)
-    if (p) await backupBeforeDelete('searched_products', p as unknown as Record<string, unknown>, 'user')
-    await db.searched_products.delete(id)
+    await deleteSearchedProduct(id)
   }
 
   return (
@@ -291,8 +289,8 @@ export default function SearchedProducts() {
             onClick={async () => {
               const pwd = window.prompt('Contraseña para borrar todos los productos buscados:')
               if (pwd !== 'APPROX') { if (pwd !== null) window.alert('Contraseña incorrecta'); return }
-              if (!window.confirm('¿Borrar TODOS los productos buscados?')) return
-              await db.searched_products.clear()
+              if (!window.confirm('¿Borrar TODOS los productos buscados? Se guardarán en la papelera.')) return
+              await deleteAllSearchedProducts()
             }}
             className="cursor-pointer rounded-lg border border-red-300 bg-white px-4 py-2.5 text-xs font-medium text-red-500"
           >

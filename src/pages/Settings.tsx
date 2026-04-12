@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
-import { deleteAllMeetings, deleteAllSuppliers, deleteAllProducts } from '@/lib/sync'
+import { deleteAllMeetings, deleteAllSuppliers, deleteAllProducts, deleteAllSearchedProducts } from '@/lib/sync'
 import { getTerms, setTerms as saveTerms, getQOS, setQOS as saveQOS, getCCEmailsSetting, setCCEmailsSetting as saveCCEmails, getFormulaGameStr, setFormulaGame as saveFormulaGame, getFormulaTicnovaStr, setFormulaTicnova as saveFormulaTicnova } from '@/lib/settings'
 import type { UserName, Relevance } from '@/types'
 
@@ -198,12 +198,11 @@ export default function Settings({ currentUser }: Props) {
       if (pwd !== null) window.alert('Contraseña incorrecta')
       return
     }
-    if (!window.confirm('¿Estás seguro? Se borrarán TODOS los datos locales. Esta acción no se puede deshacer.')) return
-    await db.products.clear()
-    await db.product_photos.clear()
-    await db.meetings.clear()
-    await db.suppliers.clear()
-    await db.searched_products.clear()
+    if (!window.confirm('¿Estás seguro? Se borrarán TODOS los datos locales. Se guardarán copias en la papelera.')) return
+    // Usar las funciones de sync.ts que hacen backup + tombstones
+    await deleteAllMeetings()   // borra meetings + products + photos con backup
+    await deleteAllSuppliers()  // borra suppliers con backup
+    await deleteAllSearchedProducts() // borra searched_products con backup
     navigate('/')
   }
 

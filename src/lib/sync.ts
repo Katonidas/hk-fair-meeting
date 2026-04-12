@@ -220,6 +220,32 @@ export async function deleteMeeting(meetingId: string): Promise<void> {
   }
 }
 
+export async function deleteProduct(productId: string): Promise<void> {
+  // BACKUP antes de borrar
+  const p = await db.products.get(productId)
+  if (p) {
+    await backupBeforeDelete('products', p as unknown as Record<string, unknown>, 'user')
+  }
+
+  // Tombstone para que el pull no lo restaure
+  deletedProductIds.add(productId)
+  saveTombstones()
+
+  // Delete locally
+  await db.product_photos.where('product_id').equals(productId).delete()
+  await db.products.delete(productId)
+
+  // Delete from Supabase
+  if (isSupabaseConfigured() && navigator.onLine) {
+    try {
+      await supabase.from('product_photos').delete().eq('product_id', productId)
+      await supabase.from('products').delete().eq('id', productId)
+    } catch (err) {
+      console.error('Error deleting product from Supabase:', err)
+    }
+  }
+}
+
 export async function deleteSearchedProduct(id: string): Promise<void> {
   // BACKUP antes de borrar
   const toBackup = await db.searched_products.get(id)
