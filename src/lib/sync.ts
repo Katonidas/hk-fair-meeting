@@ -1,5 +1,6 @@
 import { db } from './db'
 import { supabase, isSupabaseConfigured } from './supabase'
+import { backupBeforeDelete } from './backup'
 import type { Supplier, Meeting, Product } from '@/types'
 import type { SearchedProduct } from '@/types/searchedProduct'
 
@@ -94,6 +95,14 @@ export async function deleteAllMeetings(): Promise<void> {
   const allMeetings = await db.meetings.toArray()
   const allProducts = await db.products.toArray()
 
+  // BACKUP antes de borrar
+  for (const m of allMeetings) {
+    await backupBeforeDelete('meetings', m as unknown as Record<string, unknown>, 'bulk-delete')
+  }
+  for (const p of allProducts) {
+    await backupBeforeDelete('products', p as unknown as Record<string, unknown>, 'bulk-delete')
+  }
+
   // Add all IDs to tombstones
   for (const m of allMeetings) deletedMeetingIds.add(m.id)
   for (const p of allProducts) deletedProductIds.add(p.id)
@@ -123,6 +132,11 @@ export async function deleteAllMeetings(): Promise<void> {
 export async function deleteAllSuppliers(): Promise<void> {
   const allSuppliers = await db.suppliers.toArray()
 
+  // BACKUP antes de borrar
+  for (const s of allSuppliers) {
+    await backupBeforeDelete('suppliers', s as unknown as Record<string, unknown>, 'bulk-delete')
+  }
+
   for (const s of allSuppliers) deletedSupplierIds.add(s.id)
   saveTombstones()
 
@@ -141,6 +155,11 @@ export async function deleteAllSuppliers(): Promise<void> {
 
 export async function deleteAllProducts(): Promise<void> {
   const allProducts = await db.products.toArray()
+
+  // BACKUP antes de borrar
+  for (const p of allProducts) {
+    await backupBeforeDelete('products', p as unknown as Record<string, unknown>, 'bulk-delete')
+  }
 
   for (const p of allProducts) deletedProductIds.add(p.id)
   saveTombstones()
@@ -166,9 +185,16 @@ export async function deleteMeeting(meetingId: string): Promise<void> {
   // Track as deleted so pull won't restore
   deletedMeetingIds.add(meetingId)
 
+  // BACKUP: guardar copia de la reunión y sus productos antes de borrar
+  const meetingToBackup = await db.meetings.get(meetingId)
+  if (meetingToBackup) {
+    await backupBeforeDelete('meetings', meetingToBackup as unknown as Record<string, unknown>, 'user')
+  }
+
   // Get products for this meeting before deleting
   const products = await db.products.where('meeting_id').equals(meetingId).toArray()
   for (const p of products) {
+    await backupBeforeDelete('products', p as unknown as Record<string, unknown>, 'user')
     deletedProductIds.add(p.id)
   }
 
@@ -195,6 +221,12 @@ export async function deleteMeeting(meetingId: string): Promise<void> {
 }
 
 export async function deleteSearchedProduct(id: string): Promise<void> {
+  // BACKUP antes de borrar
+  const toBackup = await db.searched_products.get(id)
+  if (toBackup) {
+    await backupBeforeDelete('searched_products', toBackup as unknown as Record<string, unknown>, 'user')
+  }
+
   // Track as deleted so pull won't restore
   deletedSearchedProductIds.add(id)
   saveTombstones()
@@ -214,6 +246,12 @@ export async function deleteSearchedProduct(id: string): Promise<void> {
 
 export async function deleteAllSearchedProducts(): Promise<void> {
   const all = await db.searched_products.toArray()
+
+  // BACKUP antes de borrar
+  for (const p of all) {
+    await backupBeforeDelete('searched_products', p as unknown as Record<string, unknown>, 'bulk-delete')
+  }
+
   for (const p of all) deletedSearchedProductIds.add(p.id)
   saveTombstones()
   await db.searched_products.clear()
@@ -326,7 +364,7 @@ async function pullSuppliers() {
 
   if (error || !data) return
 
-  const remoteIds = new Set<string>(data.map((r: Record<string, unknown>) => r.id as string))
+
 
   for (const remote of data) {
     // Skip suppliers that were deleted locally
@@ -338,14 +376,11 @@ async function pullSuppliers() {
     }
   }
 
-  // Detect deletions: any local supplier that was previously synced (has synced_at)
-  // but is missing from remote → deleted on another device, delete locally
-  const localSuppliers = await db.suppliers.toArray()
-  for (const local of localSuppliers) {
-    if (local.synced_at && !remoteIds.has(local.id)) {
-      await db.suppliers.delete(local.id)
-    }
-  }
+  // ANTES AQUÍ SE BORRABAN suppliers locales que no estaban en remoto,
+  // asumiendo "borrado en otro dispositivo". ESO CAUSABA PÉRDIDA DE DATOS
+  // cuando el push fallaba por red inestable. ELIMINADO el 2026-04-13.
+  // Ahora: si un supplier existe local pero no remoto, se queda local.
+  // Solo se borran por acción explícita del usuario.
 }
 
 async function pullMeetings() {
@@ -356,7 +391,7 @@ async function pullMeetings() {
 
   if (error || !data) return
 
-  const remoteIds = new Set<string>(data.map((r: Record<string, unknown>) => r.id as string))
+
 
   for (const remote of data) {
     // Skip meetings that were deleted locally
@@ -368,15 +403,8 @@ async function pullMeetings() {
     }
   }
 
-  // Detect deletions on another device
-  const localMeetings = await db.meetings.toArray()
-  for (const local of localMeetings) {
-    if (local.synced_at && !remoteIds.has(local.id)) {
-      // Also delete products of this meeting
-      await db.products.where('meeting_id').equals(local.id).delete()
-      await db.meetings.delete(local.id)
-    }
-  }
+  // ANTES AQUÍ SE BORRABAN meetings + sus productos si no estaban en
+  // remoto. ESO CAUSABA PÉRDIDA DE DATOS. ELIMINADO el 2026-04-13.
 }
 
 async function pullProducts() {
@@ -386,7 +414,7 @@ async function pullProducts() {
 
   if (error || !data) return
 
-  const remoteIds = new Set<string>(data.map((r: Record<string, unknown>) => r.id as string))
+
 
   for (const remote of data) {
     // Skip products that were deleted locally
@@ -403,22 +431,12 @@ async function pullProducts() {
     }
   }
 
-  // Detect deletions: for any local product whose meeting/supplier is known in remote
-  // but the product itself is missing → deleted elsewhere, delete locally
-  const localProducts = await db.products.toArray()
-  const localMeetings = await db.meetings.toArray()
-  const localMeetingIds = new Set(localMeetings.map(m => m.id))
-  for (const local of localProducts) {
-    // Only delete if the product is older than 30s (to avoid race with push) and
-    // either belongs to a still-existing meeting or has supplier_id
-    if (remoteIds.has(local.id)) continue
-    const ageMs = Date.now() - new Date(local.created_at || 0).getTime()
-    if (ageMs < 30_000) continue  // too new, might not be synced yet
-    if (local.supplier_id || localMeetingIds.has(local.meeting_id)) {
-      await db.products.delete(local.id)
-      await db.product_photos.where('product_id').equals(local.id).delete()
-    }
-  }
+  // ANTES AQUÍ SE BORRABAN productos locales que no estaban en remoto.
+  // ESO ERA LA CAUSA DE LA PÉRDIDA DE DATOS: si un push fallaba por red
+  // inestable, el producto nunca llegaba a Supabase, y 30s después el pull
+  // lo borraba localmente pensando "fue borrado en otro dispositivo".
+  // ELIMINADO el 2026-04-13. Los productos SOLO se borran por acción
+  // explícita del usuario, nunca automáticamente.
 }
 
 async function pullProductPhotos() {
@@ -469,7 +487,7 @@ async function pullSearchedProducts() {
     return
   }
 
-  const remoteIds = new Set<string>(data.map((r: Record<string, unknown>) => r.id as string))
+
 
   for (const remote of data) {
     // Skip ones deleted locally (tombstone)
@@ -481,13 +499,7 @@ async function pullSearchedProducts() {
     }
   }
 
-  // Detect deletions: local rows that were once synced but are missing remotely
-  const localAll = await db.searched_products.toArray()
-  for (const local of localAll) {
-    if (local.synced_at && !remoteIds.has(local.id)) {
-      await db.searched_products.delete(local.id)
-    }
-  }
+  // Auto-delete de searched_products eliminado por seguridad (2026-04-13).
 }
 
 function toSupabaseSearchedProduct(p: SearchedProduct): Record<string, unknown> {

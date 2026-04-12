@@ -5,6 +5,7 @@ import { v4 as uuid } from 'uuid'
 import * as XLSX from 'xlsx'
 import JSZip from 'jszip'
 import { db } from '@/lib/db'
+import { backupBeforeDelete } from '@/lib/backup'
 import { normalize } from '@/lib/normalize'
 import { uploadPhoto, compressImage } from '@/lib/storage'
 import { buildMailtoUrl } from '@/lib/emailGenerator'
@@ -755,7 +756,9 @@ export function ProductDetailModal({
           {/* Delete button */}
           <button
             onClick={async () => {
-              if (!window.confirm('¿Eliminar este producto? Esta acción no se puede deshacer.')) return
+              if (!window.confirm('¿Eliminar este producto? Se guardará una copia en la papelera.')) return
+              const p = await db.products.get(product.id)
+              if (p) await backupBeforeDelete('products', p as unknown as Record<string, unknown>, 'user')
               await db.products.delete(product.id)
               if (onDeleted) onDeleted()
               onClose()

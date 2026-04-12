@@ -2,12 +2,22 @@ import Dexie, { type Table } from 'dexie'
 import type { Supplier, Meeting, Product, ProductPhoto } from '@/types'
 import type { SearchedProduct } from '@/types/searchedProduct'
 
+export interface BackupRecord {
+  id: string
+  table_name: string
+  record_id: string
+  data: string // JSON stringified
+  deleted_at: string
+  deleted_by: string
+}
+
 export class FairDB extends Dexie {
   suppliers!: Table<Supplier>
   meetings!: Table<Meeting>
   products!: Table<Product>
   product_photos!: Table<ProductPhoto>
   searched_products!: Table<SearchedProduct>
+  backups!: Table<BackupRecord>
 
   constructor() {
     super('hk-fair-meeting')
@@ -66,6 +76,12 @@ export class FairDB extends Dexie {
           }
         }
       })
+    })
+    // v12: tabla de backups — red de seguridad para datos borrados.
+    // Antes de cualquier borrado manual o por sync, se guarda una copia
+    // completa del registro aquí. Recuperable desde Settings → Papelera.
+    this.version(12).stores({
+      backups: 'id, table_name, record_id, deleted_at',
     })
   }
 }

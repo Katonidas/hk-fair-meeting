@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
+import { backupBeforeDelete } from '@/lib/backup'
 import { uploadPhoto, compressImage } from '@/lib/storage'
 import { formatDate, formatTime } from '@/lib/format'
 import { getMatchingSearchedProducts } from '@/lib/matching'
@@ -15,7 +16,7 @@ interface Props {
   currentUser: UserName
 }
 
-export default function MeetingCapture({ currentUser: _currentUser }: Props) {
+export default function MeetingCapture({ currentUser }: Props) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -257,7 +258,11 @@ export default function MeetingCapture({ currentUser: _currentUser }: Props) {
             <div className="pb-4">
               <ProductsTable
                 products={products}
-                onDelete={async (pid) => { await db.products.delete(pid) }}
+                onDelete={async (pid) => {
+                  const p = await db.products.get(pid)
+                  if (p) await backupBeforeDelete('products', p as unknown as Record<string, unknown>, currentUser)
+                  await db.products.delete(pid)
+                }}
                 supplierName={supplier.name}
                 supplierStand={supplier.stand}
               />

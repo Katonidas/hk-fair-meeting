@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/lib/db'
+import { backupBeforeDelete } from '@/lib/backup'
 import { formatDate, formatTime } from '@/lib/format'
 import { USERS, getCCEmails } from '@/lib/constants'
 import { getMatchingSearchedProducts } from '@/lib/matching'
@@ -422,7 +423,14 @@ function SupplierMeetingsTable({
   const [openMenu, setOpenMenu] = useState<string | null>(null)
 
   async function handleDelete(meetingId: string) {
-    if (!window.confirm('¿Eliminar esta reunión y todos sus productos?')) return
+    if (!window.confirm('¿Eliminar esta reunión y todos sus productos? Se guardará copia en la papelera.')) return
+    // BACKUP antes de borrar
+    const meeting = await db.meetings.get(meetingId)
+    if (meeting) await backupBeforeDelete('meetings', meeting as unknown as Record<string, unknown>, 'user')
+    const prods = await db.products.where('meeting_id').equals(meetingId).toArray()
+    for (const p of prods) {
+      await backupBeforeDelete('products', p as unknown as Record<string, unknown>, 'user')
+    }
     await db.products.where('meeting_id').equals(meetingId).delete()
     await db.meetings.delete(meetingId)
     setOpenMenu(null)
