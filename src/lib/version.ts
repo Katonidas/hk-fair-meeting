@@ -62,30 +62,22 @@ export async function getMinAppVersion(): Promise<string | null> {
 }
 
 /**
- * Registra la versión actual como la mínima requerida en Supabase.
- * Solo escribe si nuestra versión es MÁS NUEVA que la que ya hay.
- * Así, el primer dispositivo que carga un deploy nuevo "avisa" a
- * todos los demás de que tienen que actualizar.
+ * Registra la versión actual en Supabase. DESACTIVADO — la auto-escritura
+ * causaba un bucle: cada deploy tiene un timestamp distinto, el primer
+ * dispositivo que cargaba el nuevo escribía su timestamp, y los demás
+ * dispositivos (que podían tener un build unos milisegundos más viejo por
+ * caching de CDN) quedaban bloqueados permanentemente.
+ *
+ * Ahora min_app_version se actualiza SOLO manualmente cuando el CEO
+ * quiere forzar una actualización a todos. Vía Supabase dashboard o SQL:
+ *   UPDATE app_config SET value = '<nuevo-timestamp>' WHERE key = 'min_app_version';
+ *
+ * Para obtener el timestamp del build actual, abrir la consola del
+ * navegador en la versión nueva y ejecutar: console.log(__APP_BUILD_TS__)
  */
 export async function registerCurrentVersion(): Promise<void> {
-  if (!isSupabaseConfigured() || !navigator.onLine) return
-
-  try {
-    const current = await getMinAppVersion()
-
-    // Si no hay valor en Supabase, o nuestro build es más nuevo → escribir
-    if (!current || APP_BUILD_TS > current) {
-      await supabase
-        .from('app_config')
-        .upsert(
-          { key: 'min_app_version', value: APP_BUILD_TS },
-          { onConflict: 'key' },
-        )
-    }
-  } catch (err) {
-    // No bloquear si falla — es un best-effort
-    console.warn('[version] Could not register version:', err)
-  }
+  // NO-OP: auto-registro desactivado por seguridad.
+  // Ver comentario arriba para actualizar manualmente.
 }
 
 /**
