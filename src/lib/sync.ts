@@ -686,8 +686,9 @@ function toSupabaseProduct(p: Product) {
     status: p.status,
     created_at: p.created_at,
   }
-  // Only include supplier_id if it has a value (column may not exist in Supabase yet)
+  // Only include optional fields if they have a value (columns may not exist in Supabase yet)
   if (p.supplier_id) row.supplier_id = p.supplier_id
+  if (p.linked_searched_product_id) row.linked_searched_product_id = p.linked_searched_product_id
   return row
 }
 
@@ -696,6 +697,7 @@ function fromSupabaseProduct(r: Record<string, unknown>): Product {
     id: r.id as string,
     meeting_id: (r.meeting_id as string) || '',
     supplier_id: (r.supplier_id as string) || undefined,
+    linked_searched_product_id: (r.linked_searched_product_id as string) || undefined,
     product_type: (r.product_type as string) || '',
     item_model: (r.item_model as string) || '',
     price: (r.price as number) ?? null,

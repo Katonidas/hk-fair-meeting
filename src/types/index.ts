@@ -57,6 +57,9 @@ export interface Product {
   id: string
   meeting_id: string
   supplier_id?: string
+  /** ID del SearchedProduct vinculado (producto deseado). Cuando está
+   * vinculado, la tabla hereda: marca, ref, target_cost del SP. */
+  linked_searched_product_id?: string
   product_type: string
   item_model: string
   price: number | null

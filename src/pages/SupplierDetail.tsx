@@ -11,7 +11,7 @@ import { buildMailtoUrl } from '@/lib/emailGenerator'
 import { generatePotentialProductsEmailHTML, copyHTMLToClipboard } from '@/lib/htmlEmail'
 import { getTerms } from '@/lib/settings'
 import { fmtPrice } from '@/lib/price'
-import type { UserName, Relevance, ProductStatus, SampleStatus } from '@/types'
+import type { UserName, Relevance, Product, ProductStatus, SampleStatus } from '@/types'
 import type { SearchedProduct } from '@/types/searchedProduct'
 import { StatusBadge, ProductDetailModal } from '@/pages/CapturedProducts'
 import type { EnrichedProduct } from '@/pages/CapturedProducts'
@@ -951,6 +951,54 @@ function SupplierProductsTable({
   onSort: (col: string) => void
   onSelectProduct: (p: SupplierProduct) => void
 }) {
+  const [linkingProductId, setLinkingProductId] = useState<string | null>(null)
+  const [linkSearch, setLinkSearch] = useState('')
+
+  const allSearchedProducts = useLiveQuery(() => db.searched_products.toArray(), [])
+  const spMap = new Map((allSearchedProducts || []).map(sp => [sp.id, sp]))
+
+  async function handleInlineTypeEdit(productId: string, newType: string) {
+    await db.products.update(productId, { product_type: newType })
+  }
+
+  async function handleLinkProduct(productId: string, spId: string) {
+    await db.products.update(productId, { linked_searched_product_id: spId })
+    const sp = await db.searched_products.get(spId)
+    if (sp) {
+      const ids = sp.candidate_product_ids || []
+      if (!ids.includes(productId)) {
+        await db.searched_products.update(spId, {
+          candidate_product_ids: [...ids, productId],
+          updated_at: new Date().toISOString(),
+        })
+      }
+    }
+    setLinkingProductId(null)
+    setLinkSearch('')
+  }
+
+  async function handleUnlinkProduct(productId: string) {
+    const product = await db.products.get(productId)
+    if (product?.linked_searched_product_id) {
+      const sp = await db.searched_products.get(product.linked_searched_product_id)
+      if (sp) {
+        await db.searched_products.update(sp.id, {
+          candidate_product_ids: (sp.candidate_product_ids || []).filter(id => id !== productId),
+          updated_at: new Date().toISOString(),
+        })
+      }
+    }
+    await db.products.update(productId, { linked_searched_product_id: undefined })
+  }
+
+  const linkCandidates = (allSearchedProducts || []).filter(sp => {
+    if (!linkSearch) return true
+    const q = linkSearch.toLowerCase()
+    return (sp.brand || '').toLowerCase().includes(q) ||
+           (sp.product_type || '').toLowerCase().includes(q) ||
+           (sp.ref_segment || '').toLowerCase().includes(q)
+  }).slice(0, 20)
+
   if (!products || products.length === 0) {
     return (
       <div className="rounded-xl bg-white p-4 shadow-sm">
@@ -984,7 +1032,7 @@ function SupplierProductsTable({
         Productos ({products.length})
       </h2>
       <div className="-mx-4 overflow-x-auto">
-        <table className="w-full min-w-[700px] text-xs">
+        <table className="w-full min-w-[900px] text-xs">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className={`${thBase} text-left`} onClick={() => onSort('product_type')}>Tipo{arrow('product_type')}</th>
@@ -995,38 +1043,113 @@ function SupplierProductsTable({
               <th className={`${thBase} text-left`} onClick={() => onSort('features')}>Features{arrow('features')}</th>
               <th className={`${thBase} text-center`} onClick={() => onSort('sample_status')}>Sample{arrow('sample_status')}</th>
               <th className={`${thBase} text-center`} onClick={() => onSort('status')}>Estado{arrow('status')}</th>
+              <th className="px-2 py-2 font-semibold text-purple-600 border-l border-purple-200 bg-purple-50 text-left">Marca</th>
+              <th className="px-2 py-2 font-semibold text-purple-600 bg-purple-50 text-left">Ref</th>
+              <th className="px-2 py-2 font-semibold text-purple-600 bg-purple-50 text-right">Target Compra</th>
+              <th className="px-2 py-2 font-semibold text-purple-600 bg-purple-50 text-center w-20">Vincular</th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map(p => (
-              <tr
-                key={p.id}
-                onClick={() => onSelectProduct(p)}
-                className="cursor-pointer border-b border-gray-100 bg-white hover:bg-blue-50"
-              >
-                <td className="px-2 py-2.5 text-gray-600">{p.product_type || '—'}</td>
-                <td className="px-2 py-2.5 font-medium text-gray-800">{p.item_model || '—'}</td>
-                <td className="px-2 py-2.5 text-right text-gray-600">{fmtPrice(p.price)}</td>
-                <td className="px-2 py-2.5 text-right text-gray-600">{fmtPrice(p.target_price)}</td>
-                <td className="px-2 py-2.5 text-right text-gray-600">{p.moq || '—'}</td>
-                <td className="px-2 py-2.5 text-gray-500 max-w-[150px] truncate">{p.features || '—'}</td>
-                <td className="px-2 py-2.5 text-center">
-                  {p.sample_status === 'collected' ? (
-                    <span className="text-green-600 font-bold">Recogido</span>
-                  ) : p.sample_status === 'pending' ? (
-                    <span className="text-yellow-600">Pdte</span>
-                  ) : (
-                    <span className="text-gray-300">No</span>
-                  )}
-                </td>
-                <td className="px-2 py-2.5 text-center">
-                  <StatusBadge status={p.status} />
-                </td>
-              </tr>
-            ))}
+            {sorted.map(p => {
+              const linkedSP = (p as Product).linked_searched_product_id ? spMap.get((p as Product).linked_searched_product_id!) : undefined
+              return (
+                <tr
+                  key={p.id}
+                  onClick={() => onSelectProduct(p)}
+                  className="cursor-pointer border-b border-gray-100 bg-white hover:bg-blue-50"
+                >
+                  {/* Tipo — editable inline */}
+                  <td className="px-2 py-1" onClick={e => e.stopPropagation()}>
+                    <input
+                      type="text"
+                      defaultValue={p.product_type}
+                      onBlur={e => {
+                        const v = e.target.value.trim()
+                        if (v !== p.product_type) handleInlineTypeEdit(p.id, v)
+                      }}
+                      className="w-full min-w-[80px] rounded border border-transparent px-1 py-1 text-xs text-gray-600 hover:border-gray-300 focus:border-primary focus:outline-none"
+                    />
+                  </td>
+                  <td className="px-2 py-2.5 font-medium text-gray-800">{p.item_model || '—'}</td>
+                  <td className="px-2 py-2.5 text-right text-gray-600">{fmtPrice(p.price)}</td>
+                  <td className="px-2 py-2.5 text-right text-gray-600">{fmtPrice(p.target_price)}</td>
+                  <td className="px-2 py-2.5 text-right text-gray-600">{p.moq || '—'}</td>
+                  <td className="px-2 py-2.5 text-gray-500 max-w-[150px] truncate">{p.features || '—'}</td>
+                  <td className="px-2 py-2.5 text-center">
+                    {p.sample_status === 'collected' ? (
+                      <span className="text-green-600 font-bold">Recogido</span>
+                    ) : p.sample_status === 'pending' ? (
+                      <span className="text-yellow-600">Pdte</span>
+                    ) : (
+                      <span className="text-gray-300">No</span>
+                    )}
+                  </td>
+                  <td className="px-2 py-2.5 text-center">
+                    <StatusBadge status={p.status} />
+                  </td>
+                  <td className="px-2 py-2 text-purple-800 border-l border-purple-100 bg-purple-50/30 font-medium">{linkedSP?.brand || '—'}</td>
+                  <td className="px-2 py-2 text-purple-700 bg-purple-50/30">{linkedSP?.ref_segment || '—'}</td>
+                  <td className="px-2 py-2 text-right font-bold text-green-700 bg-purple-50/30">{linkedSP ? fmtPrice(linkedSP.target_cost) : '—'}</td>
+                  <td className="px-2 py-2 text-center bg-purple-50/30" onClick={e => e.stopPropagation()}>
+                    {linkedSP ? (
+                      <button
+                        onClick={() => handleUnlinkProduct(p.id)}
+                        className="rounded bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700 hover:bg-purple-200"
+                      >
+                        ✓ Desvincular
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { setLinkingProductId(p.id); setLinkSearch('') }}
+                        className="rounded bg-purple-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-purple-700"
+                      >
+                        Vincular
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
+
+      {/* Picker modal para vincular producto */}
+      {linkingProductId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-2xl bg-white p-5 mx-2">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-bold text-gray-800">Vincular a producto deseado</h3>
+              <button onClick={() => setLinkingProductId(null)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">✕</button>
+            </div>
+            <input
+              type="search"
+              placeholder="Buscar por marca, tipo, ref..."
+              value={linkSearch}
+              onChange={e => setLinkSearch(e.target.value)}
+              className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+              autoFocus
+            />
+            {linkCandidates.length === 0 ? (
+              <p className="py-6 text-center text-sm text-gray-400">No hay productos deseados disponibles.</p>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {linkCandidates.map(sp => (
+                  <button
+                    key={sp.id}
+                    onClick={() => handleLinkProduct(linkingProductId, sp.id)}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-left text-xs hover:bg-purple-50 hover:border-purple-300"
+                  >
+                    <span className="font-bold text-gray-800">{sp.brand || '—'}</span>
+                    <span className="text-gray-500"> · {sp.product_type} · {sp.ref_segment || '—'}</span>
+                    {sp.target_cost != null && <span className="ml-2 font-bold text-green-700">{fmtPrice(sp.target_cost)}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
