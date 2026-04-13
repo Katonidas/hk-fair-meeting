@@ -107,19 +107,22 @@ export async function forceAppUpdate(): Promise<void> {
   // 1. Desregistrar TODOS los service workers
   if ('serviceWorker' in navigator) {
     const registrations = await navigator.serviceWorker.getRegistrations()
-    for (const reg of registrations) {
-      await reg.unregister()
-    }
+    await Promise.all(registrations.map(r => r.unregister()))
   }
 
   // 2. Limpiar TODAS las cachés del Cache API
   if ('caches' in window) {
     const names = await caches.keys()
-    for (const name of names) {
-      await caches.delete(name)
-    }
+    await Promise.all(names.map(n => caches.delete(n)))
   }
 
-  // 3. Hard reload
-  window.location.reload()
+  // 3. Esperar a que el SW se desregistre completamente
+  await new Promise(resolve => setTimeout(resolve, 500))
+
+  // 4. Navegar con cache-buster para evitar que CDN/proxy/browser sirva
+  // una versión cacheada del index.html. No usar location.reload() porque
+  // puede servir desde cache HTTP.
+  const url = new URL(window.location.href)
+  url.searchParams.set('_v', Date.now().toString())
+  window.location.href = url.toString()
 }
