@@ -30,10 +30,7 @@ export default function Home({ currentUser }: Props) {
   const navigate = useNavigate()
 
   const allMeetings = useLiveQuery(async () => {
-    const meetings = await db.meetings
-      .where('user_name')
-      .equals(currentUser)
-      .toArray()
+    const meetings = await db.meetings.toArray()
     meetings.sort((a, b) => b.visited_at.localeCompare(a.visited_at))
 
     const enriched = await Promise.all(
@@ -44,7 +41,7 @@ export default function Home({ currentUser }: Props) {
       }),
     )
     return enriched
-  }, [currentUser])
+  }, [])
 
   const [showNewSupplier, setShowNewSupplier] = useState(false)
   const [productFilter, setProductFilter] = useState('')

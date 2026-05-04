@@ -1,5 +1,10 @@
 # Changelog — HK Fair Meeting
 
+## 2026-05-04 — Listado de reuniones muestra todos los usuarios
+- `Home.tsx`: el listado de reuniones filtraba por `user_name === currentUser`,
+  por lo que cada persona solo veía las suyas. Eliminado el filtro: ahora se
+  muestran todas las reuniones (la columna "Persona" ya identifica al autor).
+
 ## 2026-04-13 — Protección anti-pérdida de datos + QA completo (4 agentes)
 
 ### Causa raíz de la pérdida de productos (ARREGLADO)
