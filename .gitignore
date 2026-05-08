@@ -41,3 +41,9 @@ dev-dist/
 
 .vercel
 .gstack/
+
+# Claude Code — settings locales del agente
+.claude/*
+# Excepción: el respaldo del estándar Katonidas SÍ se versiona
+!.claude/KATONIDAS_STANDARDS.md
+
